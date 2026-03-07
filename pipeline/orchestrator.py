@@ -16,18 +16,27 @@ from pipeline.stages import STAGES, resolve_stage_config
 def run(args: argparse.Namespace) -> int:
     cfg = load_config(Path(args.config))
     run_root = cfg.scratch_root / cfg.run_id
-    run_root.mkdir(parents=True, exist_ok=True)
+    if not args.dry_run:
+        try:
+            run_root.mkdir(parents=True, exist_ok=True)
+        except PermissionError as exc:
+            raise PermissionError(
+                "Cannot create scratch run root. If launching from SSH/login host, "
+                "set `scratch_root` to your host-visible scratch path (e.g. "
+                "`/mnt/hackathon-proteindesign/.../scratch-gXX/...`) and reserve "
+                "`/mnt/scratch` for in-container paths."
+            ) from exc
 
-    write_json(
-        run_root / "run_manifest.json",
-        {
-            "run_id": cfg.run_id,
-            "preset": cfg.preset,
-            "target_input": str(cfg.target_input),
-            "hotspots_file": str(cfg.hotspots_file) if cfg.hotspots_file else None,
-            "hotspot_count": None,
-        },
-    )
+        write_json(
+            run_root / "run_manifest.json",
+            {
+                "run_id": cfg.run_id,
+                "preset": cfg.preset,
+                "target_input": str(cfg.target_input),
+                "hotspots_file": str(cfg.hotspots_file) if cfg.hotspots_file else None,
+                "hotspot_count": None,
+            },
+        )
 
     stage_states: Dict[str, str] = {}
 
@@ -44,22 +53,28 @@ def run(args: argparse.Namespace) -> int:
             stage_states[stage.name] = f"blocked_by:{','.join(blocked)}"
             continue
 
-        if stage_completed(stage_dir):
+        try:
+            already_done = stage_completed(stage_dir)
+        except OSError:
+            already_done = False
+
+        if already_done:
             print(f"[skip] {stage.name} already completed")
             stage_states[stage.name] = "skipped"
             continue
 
-        ensure_stage_dir(StageContext(cfg.run_id, stage.name, run_root))
-        write_json(stage_dir / "params.json", stage_cfg.params)
-        write_json(
-            stage_dir / "provenance.json",
-            {
-                "stage": stage.name,
-                "image": stage_cfg.image,
-                "dependencies": stage.dependencies,
-                "preset": cfg.preset,
-            },
-        )
+        if not args.dry_run:
+            ensure_stage_dir(StageContext(cfg.run_id, stage.name, run_root))
+            write_json(stage_dir / "params.json", stage_cfg.params)
+            write_json(
+                stage_dir / "provenance.json",
+                {
+                    "stage": stage.name,
+                    "image": stage_cfg.image,
+                    "dependencies": stage.dependencies,
+                    "preset": cfg.preset,
+                },
+            )
 
         rfd3_params = cfg.stage_overrides.get("03_rfd3_backbones")
         rfd3_json_list = []
@@ -87,7 +102,8 @@ def run(args: argparse.Namespace) -> int:
         rc = submit_or_echo(job_spec, dry_run=args.dry_run)
         stage_states[stage.name] = "completed" if (args.dry_run or rc == 0) else f"submit_failed:{rc}"
 
-    write_json(run_root / "orchestrator_state.json", stage_states)
+    if not args.dry_run:
+        write_json(run_root / "orchestrator_state.json", stage_states)
     print(json.dumps(stage_states, indent=2))
     return 0
 

@@ -51,6 +51,10 @@ All stage jobs should mount:
 - `--pvc pdw-scratch-pvc:/mnt/scratch`
 - `--pvc pdw-shared-ro-pvc:/mnt/shared-ro:ro`
 
+Important path context:
+- `/mnt/scratch` is typically the **in-container** mount path used by submitted RunAI jobs.
+- If you run the orchestrator/launcher from an SSH/login host, set `scratch_root` (or `SCRATCH_ROOT`) to your **host-visible** scratch path (for example `/mnt/hackathon-proteindesign/.../scratch-gXX/<project>`).
+
 ## 3) Stage-image mapping
 - `03_rfd3_backbones` + `07_optional_rediffusion`: RFdiffusion3 image
 - `04_ligandmpnn_design` + `08_redesign_sequences`: LigandMPNN image
@@ -101,6 +105,8 @@ Dry run (prints RunAI commands, does not submit):
 ```bash
 python -m pipeline.orchestrator --config configs/lane1.fast.yaml --dry-run
 ```
+
+In dry-run mode, the orchestrator does not create scratch directories or write run artifacts.
 
 Submit real jobs:
 ```bash

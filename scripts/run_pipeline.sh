@@ -83,6 +83,12 @@ echo "[lane1] Config written: $TMP_CONFIG"
 echo "[lane1] RFD3 checkpoint: ${CKPT_PATH:-${RFD3_CKPT_PATH:-}}"
 echo "[lane1] LigandMPNN checkpoint: ${LIGANDMPNN_CHECKPOINT}"
 echo "[lane1] AF3 model dir: ${AF3_MODEL_DIR}"
+echo "[lane1] scratch_root: ${SCRATCH_ROOT}"
+if [[ "$SCRATCH_ROOT" == /mnt/scratch/* ]]; then
+  echo "[lane1] NOTE: /mnt/scratch is usually container-internal. If running launcher on SSH/login host,"
+  echo "[lane1]       set SCRATCH_ROOT to your host-visible scratch path, e.g."
+  echo "[lane1]       /mnt/hackathon-proteindesign/.../scratch-gXX/<project>."
+fi
 python -m pipeline.orchestrator --config "$TMP_CONFIG" --dry-run
 
 if [[ "${DRY_RUN_ONLY:-0}" == "1" ]]; then
