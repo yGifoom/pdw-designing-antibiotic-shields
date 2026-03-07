@@ -96,6 +96,12 @@ runai submit lane1-af3 \
 
 ## 5) Run the Python orchestrator (submits stage jobs)
 
+Compatibility notes:
+- Some RunAI CLI versions do not support `--active-deadline-seconds`; this pipeline leaves it disabled by default.
+- To enable it on newer CLIs, set `RUNAI_ENABLE_ACTIVE_DEADLINE=1`.
+- Orchestrator output is concise by default; set `PIPELINE_VERBOSE_COMMANDS=1` to print full submit commands.
+
+
 Dry run (prints RunAI commands, does not submit):
 ```bash
 python -m pipeline.orchestrator --config configs/lane1.fast.yaml --dry-run

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
 from dataclasses import dataclass
@@ -41,21 +42,31 @@ def build_submit_command(spec: RunaiJobSpec) -> list[str]:
         f"{spec.cluster.shared_ro_pvc}:{spec.cluster.shared_ro_mount}:ro",
         "--backoff-limit",
         "0",
-        "--active-deadline-seconds",
-        str(spec.stage_cfg.timeout_minutes * 60),
         "--command",
         "--",
         "bash",
         "-lc",
         spec.command,
     ]
+
+    # Compatibility toggle for newer RunAI CLIs that support active deadline.
+    if os.environ.get("RUNAI_ENABLE_ACTIVE_DEADLINE", "0") == "1":
+        cmd[cmd.index("--command"):cmd.index("--command")] = [
+            "--active-deadline-seconds",
+            str(spec.stage_cfg.timeout_minutes * 60),
+        ]
     return cmd
 
 
 def submit_or_echo(spec: RunaiJobSpec, dry_run: bool = False) -> int:
     cmd = build_submit_command(spec)
-    rendered = " ".join(shlex.quote(part) for part in cmd)
-    print(f"[runai] {rendered}")
+    print(
+        f"[runai] submit name={spec.name} project={spec.cluster.project} "
+        f"image={spec.image} gpu={spec.stage_cfg.gpu} cpu={spec.stage_cfg.cpu} mem={spec.stage_cfg.memory}"
+    )
+    if os.environ.get("PIPELINE_VERBOSE_COMMANDS", "0") == "1":
+        rendered = " ".join(shlex.quote(part) for part in cmd)
+        print(f"[runai][cmd] {rendered}")
     if dry_run:
         return 0
     proc = subprocess.run(cmd, check=False)
