@@ -4,7 +4,7 @@ This repository implements a **modular, resumable, stage-based lane-1 pipeline**
 
 ## Scope (Lane 1 only)
 1. prepare target
-2. define hotspots (manual)
+2. define hotspots (read from RFdiffusion JSON configs)
 3. generate binder backbones with RFdiffusion3
 4. design sequences with LigandMPNN
 5. AF3 scoring
@@ -21,7 +21,7 @@ This repository implements a **modular, resumable, stage-based lane-1 pipeline**
 - `stages/` stage contract documentation + concrete tool hooks
 - `cluster/` reusable RunAI templates/helpers
 - `docs/` hotspot schema + output schema conventions
-- `examples/` manual hotspot example
+- `examples/` sample hotspot YAML (optional/manual fallback)
 - `tests/` lightweight validation tests
 
 ## EPFL RCP / RunAI Assumptions
@@ -153,16 +153,17 @@ Re-run the same orchestrator command with the same `run_id`.
 - incomplete/missing outputs are rerun
 - dependency graph prevents downstream execution when prerequisites are not complete
 
-## Hotspots (manual only)
-Supported forms:
-- residue list
-- residue range
-- center + radius
-- chain + residue IDs
+## Hotspots (from RFdiffusion JSON)
+The pipeline now resolves hotspots directly from RFdiffusion input JSON files (no separate YAML required).
 
-See `examples/hotspots.manual.yaml` and `docs/hotspot_schema.md`.
+Supported RFdiffusion input sources:
+- `RFD3_INPUT_JSON_LIST` (comma-separated explicit JSON paths)
+- `RFD3_INPUT_JSON` (single JSON path)
+- `RFD3_INPUT_JSON_GLOB` (glob pattern)
+- `stage_overrides.03_rfd3_backbones.params.rfd3_input_jsons` (YAML list)
+- `stage_overrides.03_rfd3_backbones.params.rfd3_input_glob` (YAML glob)
 
-Hotspot metadata (`hotspot_id`, `source`, `label`) must persist through downstream/final outputs.
+`02_define_hotspots` extracts hotspot-like fields from these JSON files and writes normalized hotspot metadata for downstream reporting.
 
 ## AF3 + ranking/filtering metric model
 First-pass and second-pass scoring/filters include:
@@ -195,6 +196,22 @@ Pipeline supports:
   - `cluster/templates/ligandmpnn_example.sh`
   - `cluster/templates/af3_example.sh`
 
+## Pipeline launcher script
+A configurable end-to-end launcher is provided:
+
+```bash
+./scripts/run_pipeline.sh
+```
+
+Key env vars:
+- `RUNAI_PROJECT`, `RUNAI_NAMESPACE`, `SCRATCH_PVC`, `SHARED_RO_PVC`
+- `TARGET_INPUT`, `CKPT_PATH` (or `RFD3_CKPT_PATH`)
+- `LIGANDMPNN_CHECKPOINT` (MPNN model checkpoint path)
+- `AF3_MODEL_DIR`, `AF3_JAX_CACHE_DIR`
+- `RFD3_INPUT_JSON_GLOB` or `RFD3_INPUT_JSON_LIST`
+- `PRESET` (`fast`/`thorough`), `RUN_ID`, `SCRATCH_ROOT`
+- `DRY_RUN_ONLY=1` for dry-run submit generation only
+
 ## Development
 ```bash
 python -m unittest discover -s tests
@@ -205,6 +222,13 @@ Tool hooks are now wired for RFdiffusion3, LigandMPNN and AF3 with commands adap
 
 Notes:
 - `03_rfd3_backbones` and `07_optional_rediffusion` require `CKPT_PATH` or `RFD3_CKPT_PATH`.
+- LigandMPNN stages use `LIGANDMPNN_CHECKPOINT` (default `/opt/LigandMPNN/model_params/proteinmpnn_v_48_020.pt`).
+- AF3 stages use `AF3_MODEL_DIR` and `AF3_JAX_CACHE_DIR`.
+- For multi-target / multi-length RFdiffusion sweeps, set one of:
+  - `RFD3_INPUT_JSON_LIST` (comma-separated explicit JSON paths)
+  - `RFD3_INPUT_JSON_GLOB` (glob pattern)
+  - `stage_overrides.03_rfd3_backbones.params.rfd3_input_jsons` (YAML list)
+  - `stage_overrides.03_rfd3_backbones.params.rfd3_input_glob` (YAML glob)
 - LigandMPNN stages expect PDB inputs in `LIGANDMPNN_INPUT_DIR` (default stage-local `input/`).
 - AF3 stages synthesize input JSON from FASTA and parse `*_summary_confidences.json` into `pTM`, `ipTM`, and `ipSAE`.
 - `10_esm_annotation` produces `esm_score` as pseudo-perplexity annotation and tie-breaker metadata.

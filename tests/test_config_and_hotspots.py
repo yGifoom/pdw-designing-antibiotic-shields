@@ -17,6 +17,29 @@ class ConfigHotspotTests(unittest.TestCase):
         self.assertEqual(len(records), 4)
         self.assertIn(records[0].mode, {"residue_list", "residue_range", "center_radius", "chain_residues"})
 
+    def test_config_without_hotspots_file_is_allowed(self) -> None:
+        cfg_text = """
+run_id: r1
+preset: fast
+scratch_root: /mnt/scratch/x
+target_input: /mnt/shared-ro/targets/t.pdb
+cluster:
+  project: p
+  namespace: n
+  scratch_pvc: s
+  shared_ro_pvc: ro
+images:
+  rfd3: img1
+  ligandmpnn: img2
+  af3: img3
+"""
+        p = Path('tests/.tmp_cfg.yaml')
+        p.write_text(cfg_text)
+        try:
+            cfg = load_config(p)
+            self.assertIsNone(cfg.hotspots_file)
+        finally:
+            p.unlink(missing_ok=True)
 
 if __name__ == "__main__":
     unittest.main()

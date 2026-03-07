@@ -14,7 +14,7 @@ Required files for every stage:
 
 ## Stage list
 1. `01_prepare_target`
-2. `02_define_hotspots`
+2. `02_define_hotspots` (extract from RFdiffusion JSON inputs)
 3. `03_rfd3_backbones`
 4. `04_ligandmpnn_design`
 5. `05_af3_score_pass1`
@@ -26,7 +26,7 @@ Required files for every stage:
 11. `11_final_rank_report`
 
 ## Implemented tool invocations
-- RFdiffusion3 stages call `rfd3 design out_dir=... inputs=... ckpt_path=... n_batches=... diffusion_batch_size=...`.
+- RFdiffusion3 stages call `rfd3 design out_dir=... inputs=... ckpt_path=... n_batches=... diffusion_batch_size=...` and support multiple input JSON files per stage via `RFD3_INPUT_JSON_LIST`, `RFD3_INPUT_JSON_GLOB`, `params.rfd3_input_jsons`, or `params.rfd3_input_glob`.
 - LigandMPNN stages call `/opt/LigandMPNN/run.py` with `protein_mpnn` model and checkpoint `/opt/LigandMPNN/model_params/proteinmpnn_v_48_020.pt`.
 - AF3 stages generate per-sequence input JSONs and call `/opt/alphafold3/run_alphafold.py` with `--norun_data_pipeline`, model dir `/mnt/scratch/af3_weights`, and cache `/mnt/scratch/af3_jax_cache`.
 - ESM annotation stage computes a pseudo-perplexity score (stored as `esm_score`) for shortlisted candidates and appends it into stage output tables.

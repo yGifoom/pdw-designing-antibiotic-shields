@@ -18,7 +18,7 @@ class StageDefinition:
 
 STAGES: List[StageDefinition] = [
     StageDefinition("01_prepare_target", "prepare target", "orchestrator"),
-    StageDefinition("02_define_hotspots", "manual hotspot load/validation", "orchestrator", ["01_prepare_target"]),
+    StageDefinition("02_define_hotspots", "hotspot extraction from RFdiffusion JSON", "orchestrator", ["01_prepare_target"]),
     StageDefinition("03_rfd3_backbones", "RFdiffusion3 backbone generation", "rfd3", ["02_define_hotspots"], {"num_backbones": 32}, {"num_backbones": 256}),
     StageDefinition("04_ligandmpnn_design", "LigandMPNN sequence design", "ligandmpnn", ["03_rfd3_backbones"], {"seqs_per_backbone": 4}, {"seqs_per_backbone": 16}),
     StageDefinition("05_af3_score_pass1", "AF3 scoring pass 1", "af3", ["04_ligandmpnn_design"], {"max_candidates": 128}, {"max_candidates": 2048}),

@@ -2,7 +2,6 @@ run_id: lane1-thorough-demo
 preset: thorough
 scratch_root: /mnt/scratch/pdw-lane1
 target_input: /mnt/shared-ro/targets/target_a.pdb
-hotspots_file: ./examples/hotspots.manual.yaml
 
 cluster:
   project: pdw
@@ -33,6 +32,9 @@ ranking_weights:
   esm_naturalness: 0.05
 
 stage_overrides:
+  03_rfd3_backbones:
+    params:
+      rfd3_input_glob: /mnt/scratch/pdw-lane1/rfd3_inputs/thorough/*.json
   07_optional_rediffusion:
     enabled: true
     params:

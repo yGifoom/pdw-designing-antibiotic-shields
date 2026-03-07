@@ -1,22 +1,27 @@
-# Manual Hotspot Specification Schema
+# Hotspot Extraction Schema (RFdiffusion JSON-first)
 
-Top-level YAML key: `hotspots` (list).
+Primary behavior:
+- The pipeline extracts hotspots directly from RFdiffusion input JSON files.
+- A separate hotspot YAML file is **not required**.
 
-Each hotspot requires:
-- `hotspot_id` (string)
-- `label` (string)
-- `source` (`manual`)
-- `mode` one of:
-  - `residue_list`
-  - `residue_range`
-  - `center_radius`
-  - `chain_residues`
-- `payload` (mode-dependent mapping)
+Supported RFdiffusion input selectors:
+- `RFD3_INPUT_JSON_LIST` (comma-separated JSON paths)
+- `RFD3_INPUT_JSON` (single JSON path)
+- `RFD3_INPUT_JSON_GLOB` (glob)
+- `stage_overrides.03_rfd3_backbones.params.rfd3_input_jsons` (YAML list)
+- `stage_overrides.03_rfd3_backbones.params.rfd3_input_glob` (YAML glob)
 
-Payload variants:
-- `residue_list`: `chain`, `residues: [int, ...]`
-- `residue_range`: `chain`, `start`, `end`
-- `center_radius`: `center_xyz: [x,y,z]`, `radius_angstrom`
-- `chain_residues`: `chain_residue_ids: ["A:12", "B:55", ...]`
+Stage `02_define_hotspots` recursively scans RFdiffusion JSON payloads and extracts hotspot-like keys:
+- `hotspots`
+- `hotspot`
+- `interface_hotspots`
+- `binding_hotspots`
 
-Hotspot metadata (`hotspot_id`, `label`, `source`) must be propagated through downstream outputs and final ranking tables.
+Normalized downstream fields:
+- `hotspot_id`
+- `label`
+- `source` (originating JSON path)
+- `mode` (`json_payload`)
+- `payload` (verbatim extracted hotspot object)
+
+Hotspot metadata (`hotspot_id`, `label`, `source`) is propagated for downstream reporting.

@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Dict
 
 from pipeline.config import load_config
-from pipeline.hotspots import load_hotspots
 from pipeline.runai import RunaiJobSpec, submit_or_echo
 from pipeline.stage_contract import StageContext, ensure_stage_dir, stage_completed, write_json
 from pipeline.stage_commands import build_stage_script
@@ -19,15 +18,14 @@ def run(args: argparse.Namespace) -> int:
     run_root = cfg.scratch_root / cfg.run_id
     run_root.mkdir(parents=True, exist_ok=True)
 
-    hotspots = load_hotspots(cfg.hotspots_file)
     write_json(
         run_root / "run_manifest.json",
         {
             "run_id": cfg.run_id,
             "preset": cfg.preset,
             "target_input": str(cfg.target_input),
-            "hotspots_file": str(cfg.hotspots_file),
-            "hotspot_count": len(hotspots),
+            "hotspots_file": str(cfg.hotspots_file) if cfg.hotspots_file else None,
+            "hotspot_count": None,
         },
     )
 
@@ -63,9 +61,17 @@ def run(args: argparse.Namespace) -> int:
             },
         )
 
+        rfd3_params = cfg.stage_overrides.get("03_rfd3_backbones")
+        rfd3_json_list = []
+        rfd3_json_glob = ""
+        if rfd3_params:
+            rfd3_json_list = [str(x) for x in (rfd3_params.params.get("rfd3_input_jsons", []) or [])]
+            rfd3_json_glob = str(rfd3_params.params.get("rfd3_input_glob", ""))
+
         env_prefix = (
             f"export TARGET_INPUT={shlex.quote(str(cfg.target_input))}; "
-            f"export HOTSPOTS_FILE={shlex.quote(str(cfg.hotspots_file))}; "
+            f"export RFD3_INPUT_JSON_LIST={shlex.quote(','.join(rfd3_json_list))}; "
+            f"export RFD3_INPUT_JSON_GLOB={shlex.quote(rfd3_json_glob)}; "
             f"export AF3_FASTA_GLOB={shlex.quote(str(run_root / '04_ligandmpnn_design' / 'output' / '*' / 'seqs' / '*.fa'))}; "
         )
         cmd = env_prefix + build_stage_script(run_root, stage.name)

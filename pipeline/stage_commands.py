@@ -51,37 +51,164 @@ PYEOF
 """ + _epilog(stage_dir, stage_name, "1")
 
     if stage_name == "02_define_hotspots":
-        return _prolog(stage_dir, stage_name) + f"""
-HOTSPOTS_FILE="${{HOTSPOTS_FILE:-{run_root}/../hotspots_missing.yaml}}"
+        template = _prolog(stage_dir, stage_name) + """
 python - <<'PYEOF'
-import csv, json
+import csv
+import glob
+import json
+import os
 from pathlib import Path
-from pipeline.hotspots import load_hotspots
-stage = Path('{stage_dir}')
-hs_file = Path('$HOTSPOTS_FILE')
-records = load_hotspots(hs_file)
-json.dump([r.__dict__ for r in records], open(stage/'hotspots_resolved.json','w'), indent=2)
+
+stage = Path('__STAGE_DIR__')
+params_path = stage / 'params.json'
+params = json.load(open(params_path)) if params_path.exists() else {}
+
+paths = []
+raw_list = os.environ.get('RFD3_INPUT_JSON_LIST', '').strip()
+if raw_list:
+    paths.extend([x.strip() for x in raw_list.split(',') if x.strip()])
+
+single = os.environ.get('RFD3_INPUT_JSON', '').strip()
+if single:
+    paths.append(single)
+
+env_glob = os.environ.get('RFD3_INPUT_JSON_GLOB', '').strip()
+if env_glob:
+    paths.extend(sorted(glob.glob(env_glob)))
+
+for p in params.get('rfd3_input_jsons', []) or []:
+    paths.append(str(p))
+param_glob = params.get('rfd3_input_glob')
+if param_glob:
+    paths.extend(sorted(glob.glob(str(param_glob))))
+
+# fallback to default stage03 input path if present
+default_stage3 = Path('__RUN_ROOT__/03_rfd3_backbones/input.json')
+if not paths and default_stage3.exists():
+    paths = [str(default_stage3)]
+
+seen = set()
+resolved = []
+for p in paths:
+    pp = str(Path(p))
+    if pp in seen:
+        continue
+    seen.add(pp)
+    if Path(pp).exists():
+        resolved.append(pp)
+
+hotspots = []
+
+def walk(node, source_path):
+    if isinstance(node, dict):
+        for k, v in node.items():
+            kl = str(k).lower()
+            if kl in {'hotspots', 'hotspot', 'interface_hotspots', 'binding_hotspots'} and isinstance(v, (list, dict)):
+                if isinstance(v, list):
+                    for i, item in enumerate(v):
+                        hotspots.append({
+                            'hotspot_id': '{}_hs_{}'.format(Path(source_path).stem, i),
+                            'label': '{}_{}'.format(kl, i),
+                            'source': source_path,
+                            'mode': 'json_payload',
+                            'payload': item,
+                        })
+                else:
+                    hotspots.append({
+                        'hotspot_id': '{}_hs_0'.format(Path(source_path).stem),
+                        'label': kl,
+                        'source': source_path,
+                        'mode': 'json_payload',
+                        'payload': v,
+                    })
+            walk(v, source_path)
+    elif isinstance(node, list):
+        for x in node:
+            walk(x, source_path)
+
+for path in resolved:
+    data = json.load(open(path))
+    walk(data, path)
+
+json.dump(hotspots, open(stage/'hotspots_resolved.json','w'), indent=2)
 with open(stage/'summary.csv','w',newline='') as f:
-    w=csv.writer(f); w.writerow(['hotspot_id','label','source','mode'])
-    for r in records: w.writerow([r.hotspot_id,r.label,r.source,r.mode])
+    w=csv.writer(f)
+    w.writerow(['hotspot_id','label','source','mode'])
+    for h in hotspots:
+        w.writerow([h['hotspot_id'], h['label'], h['source'], h['mode']])
 PYEOF
-""" + _epilog(stage_dir, stage_name, "sum(1 for _ in open(Path('{stage_dir}')/'summary.csv'))-1")
+"""
+        template = template.replace('__STAGE_DIR__', str(stage_dir)).replace('__RUN_ROOT__', str(run_root))
+        return template + _epilog(stage_dir, stage_name, "sum(1 for _ in open(Path('{stage_dir}')/'summary.csv'))-1")
 
     if stage_name in {"03_rfd3_backbones", "07_optional_rediffusion"}:
         return _prolog(stage_dir, stage_name) + f"""
 OUT_DIR={stage_dir}/output
 mkdir -p "$OUT_DIR"
-INPUT_JSON="${{RFD3_INPUT_JSON:-{stage_dir}/input.json}}"
-if [ ! -f "$INPUT_JSON" ]; then
-  cat > "$INPUT_JSON" << 'JSONEOF'
-{{
-  "uncond_monomer": {{
-    "dialect": 2,
-    "length": "80-100"
-  }}
-}}
-JSONEOF
-fi
+
+# Resolve one or many RFdiffusion JSON inputs from env + stage params
+INPUT_LIST_FILE="{stage_dir}/resolved_rfd3_inputs.txt"
+python - <<'PYEOF'
+import json
+import glob
+import os
+from pathlib import Path
+
+stage_dir = Path('{stage_dir}')
+params_path = stage_dir / 'params.json'
+params = json.load(open(params_path)) if params_path.exists() else {{}}
+
+paths = []
+# Highest precedence: explicit comma-separated list env
+raw_list = os.environ.get('RFD3_INPUT_JSON_LIST', '').strip()
+if raw_list:
+    paths.extend([x.strip() for x in raw_list.split(',') if x.strip()])
+
+# Single file env
+single = os.environ.get('RFD3_INPUT_JSON', '').strip()
+if single:
+    paths.append(single)
+
+# Glob env
+env_glob = os.environ.get('RFD3_INPUT_JSON_GLOB', '').strip()
+if env_glob:
+    paths.extend(sorted(glob.glob(env_glob)))
+
+# Param list
+for p in params.get('rfd3_input_jsons', []) or []:
+    paths.append(str(p))
+
+# Param glob
+param_glob = params.get('rfd3_input_glob')
+if param_glob:
+    paths.extend(sorted(glob.glob(str(param_glob))))
+
+# Default fallback single config
+if not paths:
+    default_input = stage_dir / 'input.json'
+    if not default_input.exists():
+        default_input.write_text('{{\"uncond_monomer\": {{\"dialect\": 2, \"length\": \"80-100\"}}}}')
+    paths = [str(default_input)]
+
+# normalize + deduplicate, keep existing files only
+seen = set()
+resolved = []
+for p in paths:
+    pp = str(Path(p))
+    if pp in seen:
+        continue
+    seen.add(pp)
+    if Path(pp).exists():
+        resolved.append(pp)
+
+if not resolved:
+    raise SystemExit('No valid RFdiffusion input JSON files found')
+
+with open(stage_dir / 'resolved_rfd3_inputs.txt', 'w') as f:
+    for r in resolved:
+        f.write(r + '\n')
+PYEOF
+
 N_BATCHES=$(python - <<'PYEOF'
 import json
 from pathlib import Path
@@ -100,25 +227,39 @@ CKPT="${{CKPT_PATH:-${{RFD3_CKPT_PATH:-}}}}"
 if [ -z "$CKPT" ]; then
   echo "Missing CKPT_PATH or RFD3_CKPT_PATH"; exit 1
 fi
-rfd3 design \
-  out_dir="$OUT_DIR" \
-  inputs="$INPUT_JSON" \
-  ckpt_path="$CKPT" \
-  n_batches="$N_BATCHES" \
-  diffusion_batch_size="$DIFF_BATCH"
+
+while IFS= read -r INPUT_JSON; do
+  [ -f "$INPUT_JSON" ] || continue
+  CFG_NAME=$(basename "$INPUT_JSON" .json)
+  CFG_OUT="$OUT_DIR/$CFG_NAME"
+  mkdir -p "$CFG_OUT"
+  rfd3 design \
+    out_dir="$CFG_OUT" \
+    inputs="$INPUT_JSON" \
+    ckpt_path="$CKPT" \
+    n_batches="$N_BATCHES" \
+    diffusion_batch_size="$DIFF_BATCH"
+done < "$INPUT_LIST_FILE"
+
 python - <<'PYEOF'
 import csv
 from pathlib import Path
-out = Path('{stage_dir}/output')
-cifs = sorted(out.glob('*.cif.gz'))
-meta = sorted(out.glob('*.json'))
+
+out_root = Path('{stage_dir}/output')
+rows = []
+for cfg_dir in sorted(p for p in out_root.glob('*') if p.is_dir()):
+    cifs = sorted(cfg_dir.glob('*.cif.gz'))
+    metas = sorted(cfg_dir.glob('*.json'))
+    for i, cif in enumerate(cifs):
+        meta = str(metas[i]) if i < len(metas) else ''
+        rows.append([cfg_dir.name, cif.stem, str(cif), meta])
+
 with open(Path('{stage_dir}')/'summary.csv','w',newline='') as f:
-    w=csv.writer(f); w.writerow(['backbone_id','cif_gz','meta_json'])
-    for i,c in enumerate(cifs):
-        m = str(meta[i]) if i < len(meta) else ''
-        w.writerow([c.stem, str(c), m])
+    w=csv.writer(f)
+    w.writerow(['rfd3_config_id','backbone_id','cif_gz','meta_json'])
+    w.writerows(rows)
 PYEOF
-""" + _epilog(stage_dir, stage_name, "len(list((Path('{stage_dir}')/'output').glob('*.cif.gz')))")
+""" + _epilog(stage_dir, stage_name, "len(list((Path('{stage_dir}')/'output').glob('*/*.cif.gz')))")
 
     if stage_name in {"04_ligandmpnn_design", "08_redesign_sequences"}:
         return _prolog(stage_dir, stage_name) + f"""
@@ -145,7 +286,7 @@ for PDB in "$INPUT_DIR"/*.pdb; do
   BASENAME=$(basename "$PDB" .pdb)
   python run.py \
     --model_type protein_mpnn \
-    --checkpoint_protein_mpnn /opt/LigandMPNN/model_params/proteinmpnn_v_48_020.pt \
+    --checkpoint_protein_mpnn "${{LIGANDMPNN_CHECKPOINT:-/opt/LigandMPNN/model_params/proteinmpnn_v_48_020.pt}}" \
     --pdb_path "$PDB" \
     --out_folder "$OUT_DIR/${{BASENAME}}" \
     --number_of_batches "$NUM_BATCHES" \

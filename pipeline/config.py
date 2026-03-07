@@ -64,7 +64,7 @@ class PipelineConfig:
     preset: PresetName
     scratch_root: Path
     target_input: Path
-    hotspots_file: Path
+    hotspots_file: Optional[Path]
     cluster: ClusterConfig
     images: ImageCatalog
     thresholds: GlobalThresholds = field(default_factory=GlobalThresholds)
@@ -104,7 +104,7 @@ def load_config(path: Path) -> PipelineConfig:
     if not isinstance(raw, dict):
         raise ConfigError("Top-level YAML must be a mapping")
 
-    _require_keys(raw, "root", ["run_id", "preset", "scratch_root", "target_input", "hotspots_file", "cluster", "images"])
+    _require_keys(raw, "root", ["run_id", "preset", "scratch_root", "target_input", "cluster", "images"])
 
     cluster = raw["cluster"]
     images = raw["images"]
@@ -122,7 +122,7 @@ def load_config(path: Path) -> PipelineConfig:
         preset=raw["preset"],
         scratch_root=Path(raw["scratch_root"]),
         target_input=Path(raw["target_input"]),
-        hotspots_file=Path(raw["hotspots_file"]),
+        hotspots_file=Path(raw["hotspots_file"]) if raw.get("hotspots_file") else None,
         cluster=ClusterConfig(
             project=cluster["project"],
             namespace=cluster["namespace"],
