@@ -27,6 +27,7 @@ This repository implements a **modular, resumable, stage-based lane-1 pipeline**
 ## EPFL RCP / RunAI Assumptions
 - Jobs are submitted with `runai submit`.
 - RunAI project naming follows `hackathon-proteindesign-<username>` (e.g. `hackathon-proteindesign-ygifoom`).
+- In YAML configs, `<username>` placeholders are resolved from `GASPAR` (fallback: `USER`) when the config is loaded.
 - **1 GPU per stage job**.
 - Stage-specific images:
   - RFdiffusion3: `registry.rcp.epfl.ch/proteindesign-containers/rfd3:2026.1`
@@ -225,6 +226,7 @@ Key env vars:
 - `PRESET` (`fast`/`thorough`), `RUN_ID`, `SCRATCH_ROOT`
 - `DRY_RUN_ONLY=1` for dry-run submit generation only
 - `RUNAI_PROJECT` defaults to `hackathon-proteindesign-${GASPAR}` (with `GASPAR=${USER}` by default)
+- Any `<username>` token in config values (for example `cluster.project`) resolves to the same `GASPAR` value at runtime.
 
 ## Development
 ```bash

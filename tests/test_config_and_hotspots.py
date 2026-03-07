@@ -1,5 +1,5 @@
-import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from pipeline.config import load_config
@@ -16,6 +16,56 @@ class ConfigHotspotTests(unittest.TestCase):
         records = load_hotspots(Path("examples/hotspots.manual.yaml"))
         self.assertEqual(len(records), 4)
         self.assertIn(records[0].mode, {"residue_list", "residue_range", "center_radius", "chain_residues"})
+
+    def test_username_placeholder_resolves_from_gaspar(self) -> None:
+        cfg_text = """
+run_id: r1
+preset: fast
+scratch_root: /tmp/pdw
+target_input: /tmp/target.pdb
+cluster:
+  project: hackathon-proteindesign-<username>
+  namespace: protein-design
+  scratch_pvc: s
+  shared_ro_pvc: ro
+images:
+  rfd3: img1
+  ligandmpnn: img2
+  af3: img3
+"""
+        p = Path('tests/.tmp_cfg_username.yaml')
+        p.write_text(cfg_text)
+        try:
+            with patch.dict('os.environ', {'GASPAR': 'santanto', 'USER': 'ignored'}, clear=False):
+                cfg = load_config(p)
+            self.assertEqual(cfg.cluster.project, 'hackathon-proteindesign-santanto')
+        finally:
+            p.unlink(missing_ok=True)
+
+    def test_username_placeholder_falls_back_to_user(self) -> None:
+        cfg_text = """
+run_id: r1
+preset: fast
+scratch_root: /tmp/pdw
+target_input: /tmp/target.pdb
+cluster:
+  project: hackathon-proteindesign-<username>
+  namespace: protein-design
+  scratch_pvc: s
+  shared_ro_pvc: ro
+images:
+  rfd3: img1
+  ligandmpnn: img2
+  af3: img3
+"""
+        p = Path('tests/.tmp_cfg_username_user.yaml')
+        p.write_text(cfg_text)
+        try:
+            with patch.dict('os.environ', {'USER': 'fallbackuser'}, clear=True):
+                cfg = load_config(p)
+            self.assertEqual(cfg.cluster.project, 'hackathon-proteindesign-fallbackuser')
+        finally:
+            p.unlink(missing_ok=True)
 
     def test_config_without_hotspots_file_is_allowed(self) -> None:
         cfg_text = """

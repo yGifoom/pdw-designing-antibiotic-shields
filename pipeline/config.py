@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Literal, Mapping, Optional
@@ -76,6 +77,16 @@ class ConfigError(ValueError):
     pass
 
 
+def _resolve_username_placeholders(node: Any, gaspar: str) -> Any:
+    if isinstance(node, dict):
+        return {k: _resolve_username_placeholders(v, gaspar) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_resolve_username_placeholders(v, gaspar) for v in node]
+    if isinstance(node, str):
+        return node.replace("<username>", gaspar)
+    return node
+
+
 def _require_keys(data: Mapping[str, Any], section: str, keys: list[str]) -> None:
     for key in keys:
         if key not in data:
@@ -100,6 +111,10 @@ def _load_stage_overrides(raw: Mapping[str, Any]) -> Dict[str, StageConfig]:
 def load_config(path: Path) -> PipelineConfig:
     with path.open("r", encoding="utf-8") as f:
         raw = load_yaml_lite(f.read())
+
+    gaspar = os.environ.get("GASPAR") or os.environ.get("USER") or ""
+    if gaspar:
+        raw = _resolve_username_placeholders(raw, gaspar)
 
     if not isinstance(raw, dict):
         raise ConfigError("Top-level YAML must be a mapping")
