@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Example AlphaFold3 stage submission (non-interactive)
 runai submit --name lane1-af3-example \
-  --project hackathon-proteindesign-santanto \
+  --project hackathon-proteindesign-<username> \
   --image registry.rcp.epfl.ch/proteindesign-containers/af3:2026.1 \
   --gpu 1 --cpu 8 --memory 48Gi \
   --pvc pdw-scratch-pvc:/mnt/scratch \

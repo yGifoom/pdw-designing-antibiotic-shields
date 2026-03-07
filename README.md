@@ -27,6 +27,7 @@ This repository implements a **modular, resumable, stage-based lane-1 pipeline**
 ## EPFL RCP / RunAI Assumptions
 - Jobs are submitted with `runai submit`.
 - RunAI project naming follows `hackathon-proteindesign-<username>` (e.g. `hackathon-proteindesign-ygifoom`).
+- In YAML configs, `<username>` placeholders are resolved from `GASPAR` (fallback: `USER`) when the config is loaded.
 - **1 GPU per stage job**.
 - Stage-specific images:
   - RFdiffusion3: `registry.rcp.epfl.ch/proteindesign-containers/rfd3:2026.1`
@@ -41,8 +42,9 @@ This repository implements a **modular, resumable, stage-based lane-1 pipeline**
 ## 1) Set / use your RunAI project
 
 ```bash
-runai config project hackathon-proteindesign-<username>
-# or pass --project hackathon-proteindesign-<username> in each command
+export GASPAR=<username>
+runai config project hackathon-proteindesign-${GASPAR}
+# or pass --project hackathon-proteindesign-${GASPAR} in each command
 ```
 
 ## 2) Scratch and shared storage mounts
@@ -111,6 +113,8 @@ python -m pipeline.orchestrator --config configs/lane1.fast.yaml --dry-run
 In dry-run mode, the orchestrator does not create scratch directories or write run artifacts.
 
 In normal submit mode, the orchestrator is **submit-only by default** (`PIPELINE_LOCAL_STATE=0`) and does not write host-side run artifacts under `scratch_root`; stage jobs write artifacts inside containers to mounted scratch. If you explicitly want host-side manifests/state files, set `PIPELINE_LOCAL_STATE=1`.
+
+Direct orchestrator runs also honor environment overrides for cluster wiring: `RUNAI_PROJECT`, `RUNAI_NAMESPACE`, `SCRATCH_PVC`, `SHARED_RO_PVC`. This helps avoid hardcoded PVC/project values in example config files.
 
 Submit real jobs:
 ```bash
@@ -214,13 +218,15 @@ A configurable end-to-end launcher is provided:
 ```
 
 Key env vars:
-- ``RUNAI_PROJECT` (recommended: `hackathon-proteindesign-${USER}`), `RUNAI_NAMESPACE` (config field), `SCRATCH_PVC`, `SHARED_RO_PVC`
+- ``GASPAR` (username selector, used for default project), `RUNAI_PROJECT` (optional explicit override), `RUNAI_NAMESPACE` (config field), `SCRATCH_PVC`, `SHARED_RO_PVC`
 - `TARGET_INPUT`, `CKPT_PATH` (or `RFD3_CKPT_PATH`)
 - `LIGANDMPNN_CHECKPOINT` (MPNN model checkpoint path)
 - `AF3_MODEL_DIR`, `AF3_JAX_CACHE_DIR`
 - `RFD3_INPUT_JSON_GLOB` or `RFD3_INPUT_JSON_LIST`
 - `PRESET` (`fast`/`thorough`), `RUN_ID`, `SCRATCH_ROOT`
 - `DRY_RUN_ONLY=1` for dry-run submit generation only
+- `RUNAI_PROJECT` defaults to `hackathon-proteindesign-${GASPAR}` (with `GASPAR=${USER}` by default)
+- Any `<username>` token in config values (for example `cluster.project`) resolves to the same `GASPAR` value at runtime.
 
 ## Development
 ```bash

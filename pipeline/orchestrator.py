@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import shlex
+import signal
 from pathlib import Path
 from typing import Dict
 
@@ -16,6 +17,17 @@ from pipeline.stages import STAGES, resolve_stage_config
 
 def run(args: argparse.Namespace) -> int:
     cfg = load_config(Path(args.config))
+    # Allow shell env overrides so users can run either the launcher script or
+    # `python -m pipeline.orchestrator --config ...` directly with the same exports.
+    if os.environ.get("RUNAI_PROJECT"):
+        cfg.cluster.project = os.environ["RUNAI_PROJECT"]
+    if os.environ.get("RUNAI_NAMESPACE"):
+        cfg.cluster.namespace = os.environ["RUNAI_NAMESPACE"]
+    if os.environ.get("SCRATCH_PVC"):
+        cfg.cluster.scratch_pvc = os.environ["SCRATCH_PVC"]
+    if os.environ.get("SHARED_RO_PVC"):
+        cfg.cluster.shared_ro_pvc = os.environ["SHARED_RO_PVC"]
+
     run_root = cfg.scratch_root / cfg.run_id
     local_state_enabled = os.environ.get("PIPELINE_LOCAL_STATE", "0") == "1"
 
@@ -112,6 +124,12 @@ def run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    # Avoid noisy BrokenPipeError tracebacks when piping output (e.g. `| head`).
+    try:
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    except Exception:
+        pass
+
     parser = argparse.ArgumentParser(description="Lane-1 binder design orchestrator")
     parser.add_argument("--config", required=True, help="Path to YAML config")
     parser.add_argument("--dry-run", action="store_true", help="Print runai commands only")

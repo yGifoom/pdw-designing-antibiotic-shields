@@ -7,12 +7,18 @@ set -euo pipefail
 #   RFD3_CKPT_PATH=... LIGANDMPNN_CHECKPOINT=... AF3_MODEL_DIR=... AF3_JAX_CACHE_DIR=... \
 #   ./scripts/run_pipeline.sh
 
+# Optional user selector for project naming:
+#   GASPAR=<username>
+# If RUNAI_PROJECT is not explicitly set, the launcher uses:
+#   hackathon-proteindesign-${GASPAR:-$USER}
+
 RUN_ID="${RUN_ID:-lane1-$(date +%Y%m%d-%H%M%S)}"
 PRESET="${PRESET:-fast}"
 SCRATCH_ROOT="${SCRATCH_ROOT:-/mnt/scratch/pdw-lane1}"
 TARGET_INPUT="${TARGET_INPUT:-/mnt/shared-ro/targets/target_a.pdb}"
 
-RUNAI_PROJECT="${RUNAI_PROJECT:-hackathon-proteindesign-${USER}}"
+GASPAR="${GASPAR:-${USER}}"
+RUNAI_PROJECT="${RUNAI_PROJECT:-hackathon-proteindesign-${GASPAR}}"
 RUNAI_NAMESPACE="${RUNAI_NAMESPACE:-protein-design}"
 SCRATCH_PVC="${SCRATCH_PVC:-pdw-scratch-pvc}"
 SHARED_RO_PVC="${SHARED_RO_PVC:-pdw-shared-ro-pvc}"

@@ -4,7 +4,7 @@ scratch_root: /mnt/scratch/pdw-lane1
 target_input: /mnt/shared-ro/targets/target_a.pdb
 
 cluster:
-  project: hackathon-proteindesign-santanto
+  project: hackathon-proteindesign-<username>
   namespace: protein-design
   scratch_mount: /mnt/scratch
   shared_ro_mount: /mnt/shared-ro
