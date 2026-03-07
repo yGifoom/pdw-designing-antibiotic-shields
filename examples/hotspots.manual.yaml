@@ -1,0 +1,32 @@
+hotspots:
+  - hotspot_id: hs_A_patch
+    label: receptor patch A
+    source: manual
+    mode: residue_list
+    payload:
+      chain: A
+      residues: [34, 36, 39, 41, 67]
+
+  - hotspot_id: hs_loop_range
+    label: active loop window
+    source: manual
+    mode: residue_range
+    payload:
+      chain: A
+      start: 88
+      end: 104
+
+  - hotspot_id: hs_surface_sphere
+    label: catalytic vicinity
+    source: manual
+    mode: center_radius
+    payload:
+      center_xyz: [13.2, -7.1, 22.5]
+      radius_angstrom: 8.5
+
+  - hotspot_id: hs_chain_ids
+    label: mixed chain residues
+    source: manual
+    mode: chain_residues
+    payload:
+      chain_residue_ids: ["A:145", "A:147", "B:19", "B:20"]
