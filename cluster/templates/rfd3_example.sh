@@ -2,9 +2,8 @@
 set -euo pipefail
 
 # Example RFdiffusion3 stage submission (non-interactive)
-runai submit lane1-rfd3-example \
+runai submit --name lane1-rfd3-example \
   --project pdw \
-  --namespace protein-design \
   --image registry.rcp.epfl.ch/proteindesign-containers/rfd3:2026.1 \
   --gpu 1 --cpu 8 --memory 32Gi \
   --pvc pdw-scratch-pvc:/mnt/scratch \

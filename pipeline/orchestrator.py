@@ -51,7 +51,7 @@ def run(args: argparse.Namespace) -> int:
             stage_states[stage.name] = "disabled"
             continue
 
-        blocked = [dep for dep in stage.dependencies if stage_states.get(dep) not in {"completed", "skipped"}]
+        blocked = [dep for dep in stage.dependencies if stage_states.get(dep) not in {"completed", "skipped", "disabled"}]
         if blocked:
             stage_states[stage.name] = f"blocked_by:{','.join(blocked)}"
             continue

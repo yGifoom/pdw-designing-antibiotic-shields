@@ -37,3 +37,7 @@ stage_overrides:
       rfd3_input_glob: /mnt/scratch/pdw-lane1/rfd3_inputs/fast/*.json
   07_optional_rediffusion:
     enabled: false
+  08_redesign_sequences:
+    enabled: false
+  09_af3_rescore_pass2:
+    enabled: false

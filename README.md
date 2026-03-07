@@ -44,8 +44,6 @@ runai config project pdw
 # or pass --project pdw in each command
 ```
 
-Also set namespace explicitly in submit commands (`--namespace protein-design`) or your site default namespace.
-
 ## 2) Scratch and shared storage mounts
 All stage jobs should mount:
 - `--pvc pdw-scratch-pvc:/mnt/scratch`
@@ -67,8 +65,7 @@ Important path context:
 ```bash
 runai submit lane1-rfd3 \
   --project pdw \
-  --namespace protein-design \
-  --image registry.rcp.epfl.ch/proteindesign-containers/rfd3:2026.1 \
+    --image registry.rcp.epfl.ch/proteindesign-containers/rfd3:2026.1 \
   --gpu 1 --cpu 8 --memory 32Gi \
   --pvc pdw-scratch-pvc:/mnt/scratch \
   --pvc pdw-shared-ro-pvc:/mnt/shared-ro:ro \
@@ -79,8 +76,7 @@ runai submit lane1-rfd3 \
 ```bash
 runai submit lane1-ligandmpnn \
   --project pdw \
-  --namespace protein-design \
-  --image registry.rcp.epfl.ch/proteindesign-containers/ligandmpnn:2026.1 \
+    --image registry.rcp.epfl.ch/proteindesign-containers/ligandmpnn:2026.1 \
   --gpu 1 --cpu 8 --memory 32Gi \
   --pvc pdw-scratch-pvc:/mnt/scratch \
   --pvc pdw-shared-ro-pvc:/mnt/shared-ro:ro \
@@ -91,8 +87,7 @@ runai submit lane1-ligandmpnn \
 ```bash
 runai submit lane1-af3 \
   --project pdw \
-  --namespace protein-design \
-  --image registry.rcp.epfl.ch/proteindesign-containers/af3:2026.1 \
+    --image registry.rcp.epfl.ch/proteindesign-containers/af3:2026.1 \
   --gpu 1 --cpu 8 --memory 48Gi \
   --pvc pdw-scratch-pvc:/mnt/scratch \
   --pvc pdw-shared-ro-pvc:/mnt/shared-ro:ro \
@@ -212,7 +207,7 @@ A configurable end-to-end launcher is provided:
 ```
 
 Key env vars:
-- `RUNAI_PROJECT`, `RUNAI_NAMESPACE`, `SCRATCH_PVC`, `SHARED_RO_PVC`
+- `RUNAI_PROJECT`, `RUNAI_NAMESPACE` (config field), `SCRATCH_PVC`, `SHARED_RO_PVC`
 - `TARGET_INPUT`, `CKPT_PATH` (or `RFD3_CKPT_PATH`)
 - `LIGANDMPNN_CHECKPOINT` (MPNN model checkpoint path)
 - `AF3_MODEL_DIR`, `AF3_JAX_CACHE_DIR`

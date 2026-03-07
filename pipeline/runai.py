@@ -23,11 +23,10 @@ def build_submit_command(spec: RunaiJobSpec) -> list[str]:
     cmd = [
         "runai",
         "submit",
+        "--name",
         spec.name,
         "--project",
         spec.cluster.project,
-        "--namespace",
-        spec.cluster.namespace,
         "--image",
         spec.image,
         "--gpu",
