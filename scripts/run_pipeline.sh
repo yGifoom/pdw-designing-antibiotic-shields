@@ -84,6 +84,7 @@ echo "[lane1] RFD3 checkpoint: ${CKPT_PATH:-${RFD3_CKPT_PATH:-}}"
 echo "[lane1] LigandMPNN checkpoint: ${LIGANDMPNN_CHECKPOINT}"
 echo "[lane1] AF3 model dir: ${AF3_MODEL_DIR}"
 echo "[lane1] scratch_root: ${SCRATCH_ROOT}"
+echo "[lane1] PIPELINE_LOCAL_STATE=${PIPELINE_LOCAL_STATE:-0} (set to 1 only if launcher host can write scratch_root)"
 if [[ "$SCRATCH_ROOT" == /mnt/scratch/* ]]; then
   echo "[lane1] NOTE: /mnt/scratch is usually container-internal. If running launcher on SSH/login host,"
   echo "[lane1]       set SCRATCH_ROOT to your host-visible scratch path, e.g."

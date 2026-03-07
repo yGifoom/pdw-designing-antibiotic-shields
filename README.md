@@ -108,6 +108,8 @@ python -m pipeline.orchestrator --config configs/lane1.fast.yaml --dry-run
 
 In dry-run mode, the orchestrator does not create scratch directories or write run artifacts.
 
+In normal submit mode, the orchestrator is **submit-only by default** (`PIPELINE_LOCAL_STATE=0`) and does not write host-side run artifacts under `scratch_root`; stage jobs write artifacts inside containers to mounted scratch. If you explicitly want host-side manifests/state files, set `PIPELINE_LOCAL_STATE=1`.
+
 Submit real jobs:
 ```bash
 python -m pipeline.orchestrator --config configs/lane1.thorough.yaml

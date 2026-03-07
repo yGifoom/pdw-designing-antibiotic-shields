@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 from pathlib import Path
 from typing import Dict
@@ -16,7 +17,9 @@ from pipeline.stages import STAGES, resolve_stage_config
 def run(args: argparse.Namespace) -> int:
     cfg = load_config(Path(args.config))
     run_root = cfg.scratch_root / cfg.run_id
-    if not args.dry_run:
+    local_state_enabled = os.environ.get("PIPELINE_LOCAL_STATE", "0") == "1"
+
+    if not args.dry_run and local_state_enabled:
         try:
             run_root.mkdir(parents=True, exist_ok=True)
         except PermissionError as exc:
@@ -54,7 +57,7 @@ def run(args: argparse.Namespace) -> int:
             continue
 
         try:
-            already_done = stage_completed(stage_dir)
+            already_done = stage_completed(stage_dir) if local_state_enabled else False
         except OSError:
             already_done = False
 
@@ -63,7 +66,7 @@ def run(args: argparse.Namespace) -> int:
             stage_states[stage.name] = "skipped"
             continue
 
-        if not args.dry_run:
+        if not args.dry_run and local_state_enabled:
             ensure_stage_dir(StageContext(cfg.run_id, stage.name, run_root))
             write_json(stage_dir / "params.json", stage_cfg.params)
             write_json(
@@ -102,7 +105,7 @@ def run(args: argparse.Namespace) -> int:
         rc = submit_or_echo(job_spec, dry_run=args.dry_run)
         stage_states[stage.name] = "completed" if (args.dry_run or rc == 0) else f"submit_failed:{rc}"
 
-    if not args.dry_run:
+    if not args.dry_run and local_state_enabled:
         write_json(run_root / "orchestrator_state.json", stage_states)
     print(json.dumps(stage_states, indent=2))
     return 0
