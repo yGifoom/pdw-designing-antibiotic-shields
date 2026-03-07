@@ -1,0 +1,17 @@
+hotspots:
+  - hotspot_id: active_site_patch
+    type: residue_list
+    chain: A
+    residues: [42, 44, 46, 87]
+    label: active_site
+  - hotspot_id: tunnel_patch
+    type: residue_range
+    chain: A
+    start: 120
+    end: 140
+    label: substrate_tunnel
+  - hotspot_id: loop_gate_patch
+    type: sphere
+    center_xyz: [15.2, 8.7, 22.3]
+    radius: 6.5
+    label: loop_gate
