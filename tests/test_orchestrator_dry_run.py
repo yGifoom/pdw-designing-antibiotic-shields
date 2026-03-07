@@ -119,5 +119,40 @@ stage_overrides:
             self.assertEqual(captured[0].cluster.shared_ro_pvc, "hackathon-proteindesign-shared-ro")
 
 
+
+    def test_host_scratch_root_maps_to_container_mount_for_jobs(self) -> None:
+        cfg_text = """
+run_id: map-root
+preset: fast
+scratch_root: /mnt/hackathon-proteindesign/hackathon-proteindesign-g04/scratch-g04/pdw-lane1
+target_input: /mnt/shared-ro/targets/t.pdb
+cluster:
+  project: p
+  namespace: n
+  scratch_mount: /mnt/scratch
+  scratch_pvc: s
+  shared_ro_pvc: ro
+images:
+  rfd3: img1
+  ligandmpnn: img2
+  af3: img3
+"""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "cfg.yaml"
+            cfg_path.write_text(cfg_text)
+            args = argparse.Namespace(config=str(cfg_path), dry_run=True)
+
+            captured = []
+
+            def _capture(spec, dry_run=False):  # type: ignore[no-untyped-def]
+                captured.append(spec)
+                return 0
+
+            with patch("pipeline.orchestrator.submit_or_echo", side_effect=_capture):
+                rc = run(args)
+            self.assertEqual(rc, 0)
+            self.assertTrue(captured)
+            self.assertEqual(str(captured[0].run_root), "/mnt/scratch/pdw-lane1/map-root")
+
 if __name__ == "__main__":
     unittest.main()

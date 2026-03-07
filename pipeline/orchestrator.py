@@ -15,6 +15,21 @@ from pipeline.stage_commands import build_stage_script
 from pipeline.stages import STAGES, resolve_stage_config
 
 
+def _resolve_container_scratch_root(host_scratch_root: Path, scratch_mount: str) -> Path:
+    override = os.environ.get("CONTAINER_SCRATCH_ROOT")
+    if override:
+        return Path(override)
+
+    mount = Path(scratch_mount)
+    try:
+        host_scratch_root.relative_to(mount)
+        return host_scratch_root
+    except ValueError:
+        # If host path is not container-visible (e.g. /mnt/hackathon-.../scratch-gXX/pdw-lane1),
+        # map to mounted container scratch using the leaf run folder name.
+        return mount / host_scratch_root.name
+
+
 def run(args: argparse.Namespace) -> int:
     cfg = load_config(Path(args.config))
     # Allow shell env overrides so users can run either the launcher script or
@@ -29,6 +44,8 @@ def run(args: argparse.Namespace) -> int:
         cfg.cluster.shared_ro_pvc = os.environ["SHARED_RO_PVC"]
 
     run_root = cfg.scratch_root / cfg.run_id
+    container_scratch_root = _resolve_container_scratch_root(cfg.scratch_root, cfg.cluster.scratch_mount)
+    container_run_root = container_scratch_root / cfg.run_id
     local_state_enabled = os.environ.get("PIPELINE_LOCAL_STATE", "0") == "1"
 
     if not args.dry_run and local_state_enabled:
@@ -51,6 +68,12 @@ def run(args: argparse.Namespace) -> int:
                 "hotspots_file": str(cfg.hotspots_file) if cfg.hotspots_file else None,
                 "hotspot_count": None,
             },
+        )
+
+    if not args.dry_run and not local_state_enabled and run_root != container_run_root:
+        print(
+            f"[orchestrator] host scratch_root={run_root} -> container scratch_root={container_run_root} "
+            "(override with CONTAINER_SCRATCH_ROOT if needed)"
         )
 
     stage_states: Dict[str, str] = {}
@@ -102,16 +125,16 @@ def run(args: argparse.Namespace) -> int:
             f"export TARGET_INPUT={shlex.quote(str(cfg.target_input))}; "
             f"export RFD3_INPUT_JSON_LIST={shlex.quote(','.join(rfd3_json_list))}; "
             f"export RFD3_INPUT_JSON_GLOB={shlex.quote(rfd3_json_glob)}; "
-            f"export AF3_FASTA_GLOB={shlex.quote(str(run_root / '04_ligandmpnn_design' / 'output' / '*' / 'seqs' / '*.fa'))}; "
+            f"export AF3_FASTA_GLOB={shlex.quote(str(container_run_root / '04_ligandmpnn_design' / 'output' / '*' / 'seqs' / '*.fa'))}; "
         )
-        cmd = env_prefix + build_stage_script(run_root, stage.name)
+        cmd = env_prefix + build_stage_script(container_run_root, stage.name)
         job_spec = RunaiJobSpec(
             name=f"{cfg.run_id}-{stage.name}".replace("_", "-")[:63],
             image=stage_cfg.image or cfg.images.orchestrator,
             command=cmd,
             stage_cfg=stage_cfg,
             cluster=cfg.cluster,
-            run_root=run_root,
+            run_root=container_run_root,
         )
 
         rc = submit_or_echo(job_spec, dry_run=args.dry_run)

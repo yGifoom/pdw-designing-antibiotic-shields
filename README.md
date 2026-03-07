@@ -116,6 +116,8 @@ In normal submit mode, the orchestrator is **submit-only by default** (`PIPELINE
 
 Direct orchestrator runs also honor environment overrides for cluster wiring: `RUNAI_PROJECT`, `RUNAI_NAMESPACE`, `SCRATCH_PVC`, `SHARED_RO_PVC`. This helps avoid hardcoded PVC/project values in example config files.
 
+If `scratch_root` is a host-visible SSH path (for example `/mnt/hackathon-proteindesign/.../scratch-g04/pdw-lane1`), the orchestrator now maps stage job paths to `/mnt/scratch/<leaf>` inside containers by default (example: `/mnt/scratch/pdw-lane1`). You can override this mapping explicitly with `CONTAINER_SCRATCH_ROOT`.
+
 Submit real jobs:
 ```bash
 python -m pipeline.orchestrator --config configs/lane1.thorough.yaml
@@ -223,7 +225,7 @@ Key env vars:
 - `LIGANDMPNN_CHECKPOINT` (MPNN model checkpoint path)
 - `AF3_MODEL_DIR`, `AF3_JAX_CACHE_DIR`
 - `RFD3_INPUT_JSON_GLOB` or `RFD3_INPUT_JSON_LIST`
-- `PRESET` (`fast`/`thorough`), `RUN_ID`, `SCRATCH_ROOT`
+- `PRESET` (`fast`/`thorough`), `RUN_ID`, `SCRATCH_ROOT`, `CONTAINER_SCRATCH_ROOT`
 - `DRY_RUN_ONLY=1` for dry-run submit generation only
 - `RUNAI_PROJECT` defaults to `hackathon-proteindesign-${GASPAR}` (with `GASPAR=${USER}` by default)
 - Any `<username>` token in config values (for example `cluster.project`) resolves to the same `GASPAR` value at runtime.

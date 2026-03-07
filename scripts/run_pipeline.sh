@@ -15,6 +15,7 @@ set -euo pipefail
 RUN_ID="${RUN_ID:-lane1-$(date +%Y%m%d-%H%M%S)}"
 PRESET="${PRESET:-fast}"
 SCRATCH_ROOT="${SCRATCH_ROOT:-/mnt/scratch/pdw-lane1}"
+CONTAINER_SCRATCH_ROOT="${CONTAINER_SCRATCH_ROOT:-/mnt/scratch/$(basename "${SCRATCH_ROOT}")}"
 TARGET_INPUT="${TARGET_INPUT:-/mnt/shared-ro/targets/target_a.pdb}"
 
 GASPAR="${GASPAR:-${USER}}"
@@ -89,19 +90,20 @@ echo "[lane1] Config written: $TMP_CONFIG"
 echo "[lane1] RFD3 checkpoint: ${CKPT_PATH:-${RFD3_CKPT_PATH:-}}"
 echo "[lane1] LigandMPNN checkpoint: ${LIGANDMPNN_CHECKPOINT}"
 echo "[lane1] AF3 model dir: ${AF3_MODEL_DIR}"
-echo "[lane1] scratch_root: ${SCRATCH_ROOT}"
+echo "[lane1] scratch_root(host/config): ${SCRATCH_ROOT}"
+echo "[lane1] container_scratch_root: ${CONTAINER_SCRATCH_ROOT}"
 echo "[lane1] PIPELINE_LOCAL_STATE=${PIPELINE_LOCAL_STATE:-0} (set to 1 only if launcher host can write scratch_root)"
 if [[ "$SCRATCH_ROOT" == /mnt/scratch/* ]]; then
   echo "[lane1] NOTE: /mnt/scratch is usually container-internal. If running launcher on SSH/login host,"
   echo "[lane1]       set SCRATCH_ROOT to your host-visible scratch path, e.g."
   echo "[lane1]       /mnt/hackathon-proteindesign/.../scratch-gXX/<project>."
 fi
-python -m pipeline.orchestrator --config "$TMP_CONFIG" --dry-run
+CONTAINER_SCRATCH_ROOT="${CONTAINER_SCRATCH_ROOT}" python -m pipeline.orchestrator --config "$TMP_CONFIG" --dry-run
 
 if [[ "${DRY_RUN_ONLY:-0}" == "1" ]]; then
   echo "[lane1] DRY_RUN_ONLY=1 set; stopping after dry-run"
   exit 0
 fi
 
-python -m pipeline.orchestrator --config "$TMP_CONFIG"
+CONTAINER_SCRATCH_ROOT="${CONTAINER_SCRATCH_ROOT}" python -m pipeline.orchestrator --config "$TMP_CONFIG"
 echo "[lane1] Submitted. Outputs root: ${SCRATCH_ROOT}/${RUN_ID}"
