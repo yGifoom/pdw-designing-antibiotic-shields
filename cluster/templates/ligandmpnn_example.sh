@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Example LigandMPNN stage submission (non-interactive)
 runai submit --name lane1-ligandmpnn-example \
-  --project hackathon-proteindesign-<username> \
+  --project hackathon-proteindesign-santanto \
   --image registry.rcp.epfl.ch/proteindesign-containers/ligandmpnn:2026.1 \
   --gpu 1 --cpu 8 --memory 32Gi \
   --pvc pdw-scratch-pvc:/mnt/scratch \
