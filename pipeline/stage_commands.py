@@ -141,7 +141,7 @@ PYEOF
         template = template.replace('__STAGE_DIR__', str(stage_dir)).replace('__RUN_ROOT__', str(run_root))
         return template + _epilog(stage_dir, stage_name, "sum(1 for _ in open(Path('{stage_dir}')/'summary.csv'))-1")
 
-    if stage_name in {"03_rfd3_backbones", "07_optional_rediffusion"}:
+    if stage_name == "03_rfd3_backbones":
         return _prolog(stage_dir, stage_name) + f"""
 OUT_DIR={stage_dir}/output
 mkdir -p "$OUT_DIR"
@@ -223,6 +223,163 @@ p=Path('{stage_dir}/params.json')
 print(json.load(open(p)).get('diffusion_batch_size',2) if p.exists() else 2)
 PYEOF
 )
+CKPT="${{CKPT_PATH:-${{RFD3_CKPT_PATH:-}}}}"
+if [ -z "$CKPT" ]; then
+  echo "Missing CKPT_PATH or RFD3_CKPT_PATH"; exit 1
+fi
+
+while IFS= read -r INPUT_JSON; do
+  [ -f "$INPUT_JSON" ] || continue
+  CFG_NAME=$(basename "$INPUT_JSON" .json)
+  CFG_OUT="$OUT_DIR/$CFG_NAME"
+  mkdir -p "$CFG_OUT"
+  rfd3 design \
+    out_dir="$CFG_OUT" \
+    inputs="$INPUT_JSON" \
+    ckpt_path="$CKPT" \
+    n_batches="$N_BATCHES" \
+    diffusion_batch_size="$DIFF_BATCH"
+done < "$INPUT_LIST_FILE"
+
+python - <<'PYEOF'
+import csv
+from pathlib import Path
+
+out_root = Path('{stage_dir}/output')
+rows = []
+for cfg_dir in sorted(p for p in out_root.glob('*') if p.is_dir()):
+    cifs = sorted(cfg_dir.glob('*.cif.gz'))
+    metas = sorted(cfg_dir.glob('*.json'))
+    for i, cif in enumerate(cifs):
+        meta = str(metas[i]) if i < len(metas) else ''
+        rows.append([cfg_dir.name, cif.stem, str(cif), meta])
+
+with open(Path('{stage_dir}')/'summary.csv','w',newline='') as f:
+    w=csv.writer(f)
+    w.writerow(['rfd3_config_id','backbone_id','cif_gz','meta_json'])
+    w.writerows(rows)
+PYEOF
+""" + _epilog(stage_dir, stage_name, "len(list((Path('{stage_dir}')/'output').glob('*/*.cif.gz')))")
+
+    if stage_name == "07_optional_rediffusion":
+        return _prolog(stage_dir, stage_name) + f"""
+OUT_DIR={stage_dir}/output
+mkdir -p "$OUT_DIR"
+
+INPUT_LIST_FILE="{stage_dir}/resolved_rfd3_inputs.txt"
+
+python - <<'PYEOF'
+import json
+import csv
+from pathlib import Path
+
+stage_dir = Path('{stage_dir}')
+params_path = stage_dir / 'params.json'
+params = json.load(open(params_path)) if params_path.exists() else {{}}
+
+partial_t = params.get('partial_T', 40)
+
+run_root = Path('{run_root}')
+stage06_csv = run_root / '06_rank_cluster_filter_pass1' / 'summary.csv'
+stage03_csv = run_root / '03_rfd3_backbones' / 'summary.csv'
+stage03_inputs = run_root / '03_rfd3_backbones' / 'resolved_rfd3_inputs.txt'
+
+if not stage06_csv.exists() or not stage03_csv.exists() or not stage03_inputs.exists():
+    raise SystemExit('Missing upstream stage data for rediffusion')
+
+# Read original RFdiffusion inputs
+original_jsons = {{}}
+with open(stage03_inputs) as f:
+    for line in f:
+        line = line.strip()
+        if line:
+            name = Path(line).stem
+            try:
+                original_jsons[name] = json.load(open(line))
+            except Exception as e:
+                print(f"Warning: could not load {{line}}: {{e}}")
+
+# Read map from backbone_id to rfd3_config_id
+bb_to_cfg = {{}}
+with open(stage03_csv) as f:
+    for row in csv.DictReader(f):
+        bb_to_cfg[row['backbone_id']] = row['rfd3_config_id']
+
+# Select candidates
+candidates_to_rediffuse = []
+with open(stage06_csv) as f:
+    for row in csv.DictReader(f):
+        if row.get('selected_for_rediffusion') == 'True':
+            candidates_to_rediffuse.append(row)
+
+jsons_dir = stage_dir / 'rediffusion_inputs'
+jsons_dir.mkdir(exist_ok=True)
+inputs_list = []
+
+for row in candidates_to_rediffuse:
+    cid = row['candidate_id']
+    parts = cid.rsplit('_seq', 1)
+    bb_id = parts[0] if len(parts) == 2 else cid
+
+    cfg_name = bb_to_cfg.get(bb_id)
+    if not cfg_name or cfg_name not in original_jsons:
+         print(f"Cannot find original JSON for {{bb_id}} (from candidate {{cid}})")
+         continue
+         
+    orig_json = original_jsons[cfg_name]
+    
+    conf_path = Path(row['summary_conf_path'])
+    cif_path = conf_path.parent / f"{{cid}}_model.cif"
+    
+    if not cif_path.exists():
+         print(f"Warning: Missing CIF for {{cid}}: {{cif_path}}")
+         continue
+         
+    # Extract base config structure (assume it's wrapped in a dict if multi-job)
+    sub_cfg = None
+    for k, v in orig_json.items():
+        if isinstance(v, dict):
+             sub_cfg = v
+             break
+             
+    if not sub_cfg:
+        sub_cfg = orig_json
+        wrapper_key = cid
+    else:
+        wrapper_key = next(k for k, v in orig_json.items() if isinstance(v, dict))
+        
+    rediff_cfg = sub_cfg.copy()
+    rediff_cfg['input'] = str(cif_path)
+    
+    if 'diffuser' not in rediff_cfg:
+        rediff_cfg['diffuser'] = {{}}
+    rediff_cfg['diffuser']['partial_T'] = partial_t
+    
+    new_json_path = jsons_dir / f"{{cid}}_rediffusion.json"
+    with open(new_json_path, 'w') as out_f:
+        if wrapper_key:
+            json.dump({{wrapper_key: rediff_cfg}}, out_f, indent=2)
+        else:
+            json.dump(rediff_cfg, out_f, indent=2)
+         
+    inputs_list.append(str(new_json_path))
+
+with open(stage_dir / 'resolved_rfd3_inputs.txt', 'w') as f:
+    for p in inputs_list:
+        f.write(p + '\\n')
+        
+expansion = params.get('expansion_per_family', 8)
+n_batches = max(1, expansion // 2)
+diff_batch = 2 if expansion >= 2 else 1
+
+d = dict(n_batches=n_batches, diffusion_batch_size=diff_batch)
+json.dump(d, open(stage_dir / 'rediff_params.json', 'w'))
+
+PYEOF
+
+N_BATCHES=$(python -c "import json; print(json.load(open('$stage_dir/rediff_params.json'))['n_batches'])")
+DIFF_BATCH=$(python -c "import json; print(json.load(open('$stage_dir/rediff_params.json'))['diffusion_batch_size'])")
+
 CKPT="${{CKPT_PATH:-${{RFD3_CKPT_PATH:-}}}}"
 if [ -z "$CKPT" ]; then
   echo "Missing CKPT_PATH or RFD3_CKPT_PATH"; exit 1
