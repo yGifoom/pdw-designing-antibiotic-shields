@@ -153,6 +153,30 @@ Under `/mnt/scratch`:
   11_final_rank_report/
 ```
 
+
+### Host vs container output path mapping
+When jobs run in containers, stage outputs are written under the container scratch mount (`/mnt/scratch/...`).
+From SSH/login nodes, the same files are visible under the host scratch root you exported (`SCRATCH_ROOT`).
+
+Example mapping:
+- Inside container: `/mnt/scratch/pdw-lane1/rfd3/output`
+- Outside container (SSH host): `/mnt/hackathon-proteindesign/hackathon-proteindesign-g04/scratch-g04/pdw-lane1/rfd3/output`
+
+Recommended exports for dynamic mapping:
+```bash
+export SCRATCH_ROOT=/mnt/hackathon-proteindesign/hackathon-proteindesign-g04/scratch-g04/pdw-lane1
+export CONTAINER_SCRATCH_ROOT=/mnt/scratch/$(basename "$SCRATCH_ROOT")
+```
+
+Quick verification after submit:
+```bash
+# Host-visible output location
+ls -lah "${SCRATCH_ROOT}/${RUN_ID}"
+
+# Optional: check container-side path used by stage jobs (from dry-run output)
+# should look like /mnt/scratch/<leaf>/<run_id>/...
+```
+
 Each stage directory must include:
 - `status.json`
 - `params.json`

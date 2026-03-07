@@ -15,7 +15,9 @@ set -euo pipefail
 RUN_ID="${RUN_ID:-lane1-$(date +%Y%m%d-%H%M%S)}"
 PRESET="${PRESET:-fast}"
 SCRATCH_ROOT="${SCRATCH_ROOT:-/mnt/scratch/pdw-lane1}"
+SCRATCH_ROOT="${SCRATCH_ROOT%/}"
 CONTAINER_SCRATCH_ROOT="${CONTAINER_SCRATCH_ROOT:-/mnt/scratch/$(basename "${SCRATCH_ROOT}")}"
+CONTAINER_SCRATCH_ROOT="${CONTAINER_SCRATCH_ROOT%/}"
 TARGET_INPUT="${TARGET_INPUT:-/mnt/shared-ro/targets/target_a.pdb}"
 
 GASPAR="${GASPAR:-${USER}}"
@@ -48,6 +50,8 @@ if [[ -z "${AF3_MODEL_DIR}" ]]; then
   echo "ERROR: AF3_MODEL_DIR must be set" >&2
   exit 1
 fi
+
+HOST_RUN_ROOT="${SCRATCH_ROOT}/${RUN_ID}"
 
 TMP_CONFIG="${TMP_CONFIG:-/tmp/lane1.${RUN_ID}.yaml}"
 cat > "$TMP_CONFIG" <<YAML
@@ -105,5 +109,7 @@ if [[ "${DRY_RUN_ONLY:-0}" == "1" ]]; then
   exit 0
 fi
 
+mkdir -p "${HOST_RUN_ROOT}"
+
 CONTAINER_SCRATCH_ROOT="${CONTAINER_SCRATCH_ROOT}" python -m pipeline.orchestrator --config "$TMP_CONFIG"
-echo "[lane1] Submitted. Outputs root: ${SCRATCH_ROOT}/${RUN_ID}"
+echo "[lane1] Submitted. Outputs root: ${HOST_RUN_ROOT}"
