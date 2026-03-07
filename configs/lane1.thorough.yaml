@@ -1,0 +1,41 @@
+run_id: lane1-thorough-demo
+preset: thorough
+scratch_root: /mnt/scratch/pdw-lane1
+target_input: /mnt/shared-ro/targets/target_a.pdb
+
+cluster:
+  project: pdw
+  namespace: protein-design
+  scratch_mount: /mnt/scratch
+  shared_ro_mount: /mnt/shared-ro
+  scratch_pvc: pdw-scratch-pvc
+  shared_ro_pvc: pdw-shared-ro-pvc
+
+images:
+  orchestrator: python:3.11-slim
+  rfd3: registry.rcp.epfl.ch/proteindesign-containers/rfd3:2026.1
+  ligandmpnn: registry.rcp.epfl.ch/proteindesign-containers/ligandmpnn:2026.1
+  af3: registry.rcp.epfl.ch/proteindesign-containers/af3:2026.1
+
+thresholds:
+  pTM_min: 0.7
+  ipTM_min: 0.65
+  ipSAE_min: 0.6
+  clash_free_required: true
+
+ranking_weights:
+  pTM: 0.18
+  ipTM: 0.28
+  ipSAE: 0.32
+  pose_retention: 0.12
+  interface_geometry_agreement: 0.05
+  esm_naturalness: 0.05
+
+stage_overrides:
+  03_rfd3_backbones:
+    params:
+      rfd3_input_glob: /mnt/scratch/pdw-lane1/rfd3_inputs/thorough/*.json
+  07_optional_rediffusion:
+    enabled: true
+    params:
+      expansion_per_family: 12
