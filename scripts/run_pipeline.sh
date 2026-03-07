@@ -12,7 +12,7 @@ PRESET="${PRESET:-fast}"
 SCRATCH_ROOT="${SCRATCH_ROOT:-/mnt/scratch/pdw-lane1}"
 TARGET_INPUT="${TARGET_INPUT:-/mnt/shared-ro/targets/target_a.pdb}"
 
-RUNAI_PROJECT="${RUNAI_PROJECT:-pdw}"
+RUNAI_PROJECT="${RUNAI_PROJECT:-hackathon-proteindesign-${USER}}"
 RUNAI_NAMESPACE="${RUNAI_NAMESPACE:-protein-design}"
 SCRATCH_PVC="${SCRATCH_PVC:-pdw-scratch-pvc}"
 SHARED_RO_PVC="${SHARED_RO_PVC:-pdw-shared-ro-pvc}"

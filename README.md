@@ -26,6 +26,7 @@ This repository implements a **modular, resumable, stage-based lane-1 pipeline**
 
 ## EPFL RCP / RunAI Assumptions
 - Jobs are submitted with `runai submit`.
+- RunAI project naming follows `hackathon-proteindesign-<username>` (e.g. `hackathon-proteindesign-ygifoom`).
 - **1 GPU per stage job**.
 - Stage-specific images:
   - RFdiffusion3: `registry.rcp.epfl.ch/proteindesign-containers/rfd3:2026.1`
@@ -40,8 +41,8 @@ This repository implements a **modular, resumable, stage-based lane-1 pipeline**
 ## 1) Set / use your RunAI project
 
 ```bash
-runai config project pdw
-# or pass --project pdw in each command
+runai config project hackathon-proteindesign-<username>
+# or pass --project hackathon-proteindesign-<username> in each command
 ```
 
 ## 2) Scratch and shared storage mounts
@@ -64,7 +65,7 @@ Important path context:
 ### RFdiffusion3 stage
 ```bash
 runai submit lane1-rfd3 \
-  --project pdw \
+  --project hackathon-proteindesign-<username> \
     --image registry.rcp.epfl.ch/proteindesign-containers/rfd3:2026.1 \
   --gpu 1 --cpu 8 --memory 32Gi \
   --pvc pdw-scratch-pvc:/mnt/scratch \
@@ -75,7 +76,7 @@ runai submit lane1-rfd3 \
 ### LigandMPNN stage
 ```bash
 runai submit lane1-ligandmpnn \
-  --project pdw \
+  --project hackathon-proteindesign-<username> \
     --image registry.rcp.epfl.ch/proteindesign-containers/ligandmpnn:2026.1 \
   --gpu 1 --cpu 8 --memory 32Gi \
   --pvc pdw-scratch-pvc:/mnt/scratch \
@@ -86,7 +87,7 @@ runai submit lane1-ligandmpnn \
 ### AF3 stage
 ```bash
 runai submit lane1-af3 \
-  --project pdw \
+  --project hackathon-proteindesign-<username> \
     --image registry.rcp.epfl.ch/proteindesign-containers/af3:2026.1 \
   --gpu 1 --cpu 8 --memory 48Gi \
   --pvc pdw-scratch-pvc:/mnt/scratch \
@@ -213,7 +214,7 @@ A configurable end-to-end launcher is provided:
 ```
 
 Key env vars:
-- `RUNAI_PROJECT`, `RUNAI_NAMESPACE` (config field), `SCRATCH_PVC`, `SHARED_RO_PVC`
+- ``RUNAI_PROJECT` (recommended: `hackathon-proteindesign-${USER}`), `RUNAI_NAMESPACE` (config field), `SCRATCH_PVC`, `SHARED_RO_PVC`
 - `TARGET_INPUT`, `CKPT_PATH` (or `RFD3_CKPT_PATH`)
 - `LIGANDMPNN_CHECKPOINT` (MPNN model checkpoint path)
 - `AF3_MODEL_DIR`, `AF3_JAX_CACHE_DIR`
