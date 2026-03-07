@@ -1,0 +1,19 @@
+# Stage-to-image mapping template for lane 2 pipeline.
+01_prepare_target: lane2/prepare:latest
+02_bioemu_generate: lane2/bioemu:latest
+03_bioemu_cluster: lane2/cluster:latest
+04_hotspot_detect: lane2/hotspot:latest
+05_hotspot_select: lane2/hotspot:latest
+06_generate_backbones: lane2/rfdiffusion:latest
+07_design_seq_ligandmpnn: lane2/ligandmpnn:latest
+08_design_seq_carbonara: lane2/carbonara:latest
+09_af3_score: lane2/af3:latest
+10_rank_first_pass: lane2/rank:latest
+11_select_rediffusion_seeds: lane2/rank:latest
+12_rediffusion: lane2/rediffusion:latest
+13_seq_redesign: lane2/redesign:latest
+14_af3_rescore: lane2/af3:latest
+15_bioemu_candidate_sanity: lane2/bioemu:latest
+16_esm_annotate: lane2/esm:latest
+17_final_rank: lane2/rank:latest
+18_report: lane2/report:latest
