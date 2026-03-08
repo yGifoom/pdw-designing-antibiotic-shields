@@ -14,7 +14,7 @@ set -euo pipefail
 
 RUN_ID="${RUN_ID:-lane1-$(date +%Y%m%d-%H%M%S)}"
 PRESET="${PRESET:-fast}"
-SCRATCH_ROOT="${SCRATCH_ROOT:-/mnt/scratch/pdw-lane1}"
+SCRATCH_ROOT="${SCRATCH_ROOT:-/mnt/hackathon-proteindesign/hackathon-proteindesign-g04/scratch-g04/pdw-lane1}"
 CONTAINER_SCRATCH_ROOT="${CONTAINER_SCRATCH_ROOT:-/mnt/scratch/$(basename "${SCRATCH_ROOT}")}"
 TARGET_INPUT="${TARGET_INPUT:-/mnt/shared-ro/targets/target_a.pdb}"
 
