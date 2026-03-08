@@ -244,12 +244,13 @@ A configurable end-to-end launcher is provided:
 ```
 
 Key env vars:
+- launcher now uses a fixed output root: host `/mnt/hackathon-proteindesign/hackathon-proteindesign-g04/scratch-g04/pdw-lane1` and container `/mnt/scratch/pdw-lane1`.
 - ``GASPAR` (username selector, used for default project), `RUNAI_PROJECT` (optional explicit override), `RUNAI_NAMESPACE` (config field), `SCRATCH_PVC`, `SHARED_RO_PVC`
 - `TARGET_INPUT`, `CKPT_PATH` (or `RFD3_CKPT_PATH`)
 - `LIGANDMPNN_CHECKPOINT` (MPNN model checkpoint path)
 - `AF3_MODEL_DIR`, `AF3_JAX_CACHE_DIR`
 - `RFD3_INPUT_JSON_GLOB` or `RFD3_INPUT_JSON_LIST`
-- `PRESET` (`fast`/`thorough`), `RUN_ID`, `SCRATCH_ROOT`, `CONTAINER_SCRATCH_ROOT`
+- `PRESET` (`fast`/`thorough`), `RUN_ID`
 - `DRY_RUN_ONLY=1` for dry-run submit generation only
 - `RUNAI_PROJECT` defaults to `hackathon-proteindesign-${GASPAR}` (with `GASPAR=${USER}` by default)
 - Any `<username>` token in config values (for example `cluster.project`) resolves to the same `GASPAR` value at runtime.

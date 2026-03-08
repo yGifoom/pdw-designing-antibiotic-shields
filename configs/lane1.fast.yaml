@@ -1,6 +1,6 @@
 run_id: lane1-fast-demo
 preset: fast
-scratch_root: /mnt/scratch/pdw-lane1
+scratch_root: /mnt/hackathon-proteindesign/hackathon-proteindesign-g04/scratch-g04/pdw-lane1
 target_input: /mnt/shared-ro/targets/target_a.pdb
 
 cluster:
