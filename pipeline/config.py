@@ -35,6 +35,9 @@ class GlobalThresholds:
     pTM_min: float = 0.65
     ipTM_min: float = 0.6
     ipSAE_min: float = 0.55
+    pLDDT_min: float = 70.0
+    iPAE_max: float = 15.0
+    rmsd_max: float = 3.0
     clash_free_required: bool = True
 
 
@@ -43,7 +46,9 @@ class RankingWeights:
     pTM: float = 0.2
     ipTM: float = 0.3
     ipSAE: float = 0.3
-    pose_retention: float = 0.1
+    pLDDT: float = 0.05
+    iPAE_penalty: float = 0.05
+    rmsd_penalty: float = 0.1
     interface_geometry_agreement: float = 0.05
     esm_naturalness: float = 0.05
 

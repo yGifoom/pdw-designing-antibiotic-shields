@@ -79,3 +79,49 @@ def submit_or_echo(spec: RunaiJobSpec, dry_run: bool = False) -> int:
         return 0
     proc = subprocess.run(cmd, check=False)
     return proc.returncode
+
+
+def wait_for_job(
+    job_name: str,
+    cluster: ClusterConfig,
+    timeout_minutes: int = 240,
+    poll_interval: int = 30,
+) -> str:
+    """Poll ``runai describe job`` until the job reaches a terminal state.
+
+    Returns one of:
+      - ``"completed"``   – job succeeded
+      - ``"failed:<name>"`` – job failed or errored
+      - ``"timeout:<name>"`` – deadline exceeded without terminal state
+    """
+    import time
+
+    deadline = time.time() + timeout_minutes * 60
+    _safe_print(
+        f"[runai][wait] waiting for job {job_name} "
+        f"(timeout {timeout_minutes}m, poll every {poll_interval}s)"
+    )
+    while time.time() < deadline:
+        proc = subprocess.run(
+            ["runai", "describe", "job", job_name, "--project", cluster.project],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        stdout_lower = proc.stdout.lower()
+        # RunAI describe output contains a "Status:" line with the job state.
+        if "succeeded" in stdout_lower:
+            _safe_print(f"[runai][wait] {job_name} succeeded")
+            return "completed"
+        if "failed" in stdout_lower or "error" in stdout_lower:
+            _safe_print(f"[runai][wait] {job_name} failed/errored")
+            return f"failed:{job_name}"
+
+        _safe_print(
+            f"[runai][wait] {job_name} still running... "
+            f"(next check in {poll_interval}s)"
+        )
+        time.sleep(poll_interval)
+
+    _safe_print(f"[runai][wait] {job_name} timed out after {timeout_minutes}m")
+    return f"timeout:{job_name}"

@@ -66,7 +66,8 @@ stage_overrides:
             args = argparse.Namespace(config=str(cfg_path), dry_run=False)
             with patch("pipeline.orchestrator.Path.mkdir", side_effect=AssertionError("mkdir should not be called with PIPELINE_LOCAL_STATE=0")):
                 with patch("pipeline.orchestrator.submit_or_echo", return_value=0):
-                    rc = run(args)
+                    with patch("pipeline.orchestrator.wait_for_job", return_value="completed"):
+                        rc = run(args)
             self.assertEqual(rc, 0)
 
     def test_env_overrides_cluster_pvcs_for_direct_orchestrator_run(self) -> None:

@@ -106,4 +106,4 @@ if [[ "${DRY_RUN_ONLY:-0}" == "1" ]]; then
 fi
 
 CONTAINER_SCRATCH_ROOT="${CONTAINER_SCRATCH_ROOT}" python -m pipeline.orchestrator --config "$TMP_CONFIG"
-echo "[lane1] Submitted. Outputs root: ${SCRATCH_ROOT}/${RUN_ID}"
+echo "[lane1] Pipeline complete. Outputs root: ${SCRATCH_ROOT}/${RUN_ID}"

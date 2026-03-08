@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Dict
 
 from pipeline.config import load_config
-from pipeline.runai import RunaiJobSpec, submit_or_echo
+from pipeline.runai import RunaiJobSpec, submit_or_echo, wait_for_job
 from pipeline.stage_contract import StageContext, ensure_stage_dir, stage_completed, write_json
 from pipeline.stage_commands import build_stage_script
 from pipeline.stages import STAGES, resolve_stage_config
+from pathlib import PurePosixPath
 
 
 def _resolve_container_scratch_root(host_scratch_root: Path, scratch_mount: str) -> Path:
@@ -45,7 +46,7 @@ def run(args: argparse.Namespace) -> int:
 
     run_root = cfg.scratch_root / cfg.run_id
     container_scratch_root = _resolve_container_scratch_root(cfg.scratch_root, cfg.cluster.scratch_mount)
-    container_run_root = container_scratch_root / cfg.run_id
+    container_run_root = PurePosixPath((container_scratch_root / cfg.run_id).as_posix())
     local_state_enabled = os.environ.get("PIPELINE_LOCAL_STATE", "0") == "1"
 
     if not args.dry_run and local_state_enabled:
@@ -122,10 +123,22 @@ def run(args: argparse.Namespace) -> int:
             rfd3_json_glob = str(rfd3_params.params.get("rfd3_input_glob", ""))
 
         env_prefix = (
-            f"export TARGET_INPUT={shlex.quote(str(cfg.target_input))}; "
+            f"export TARGET_INPUT={shlex.quote(cfg.target_input.as_posix())}; "
             f"export RFD3_INPUT_JSON_LIST={shlex.quote(','.join(rfd3_json_list))}; "
             f"export RFD3_INPUT_JSON_GLOB={shlex.quote(rfd3_json_glob)}; "
-            f"export AF3_FASTA_GLOB={shlex.quote(str(container_run_root / '04_ligandmpnn_design' / 'output' / '*' / 'seqs' / '*.fa'))}; "
+            f"export AF3_FASTA_GLOB={shlex.quote((container_run_root / '04_ligandmpnn_design' / 'output' / '*' / 'seqs' / '*.fa').as_posix())}; "
+            f"export THRESHOLD_PTM={shlex.quote(str(cfg.thresholds.pTM_min))}; "
+            f"export THRESHOLD_IPTM={shlex.quote(str(cfg.thresholds.ipTM_min))}; "
+            f"export THRESHOLD_IPSAE={shlex.quote(str(cfg.thresholds.ipSAE_min))}; "
+            f"export THRESHOLD_PLDDT={shlex.quote(str(cfg.thresholds.pLDDT_min))}; "
+            f"export THRESHOLD_IPAE={shlex.quote(str(cfg.thresholds.iPAE_max))}; "
+            f"export THRESHOLD_RMSD={shlex.quote(str(cfg.thresholds.rmsd_max))}; "
+            f"export WEIGHT_PTM={shlex.quote(str(cfg.ranking_weights.pTM))}; "
+            f"export WEIGHT_IPTM={shlex.quote(str(cfg.ranking_weights.ipTM))}; "
+            f"export WEIGHT_IPSAE={shlex.quote(str(cfg.ranking_weights.ipSAE))}; "
+            f"export WEIGHT_PLDDT={shlex.quote(str(cfg.ranking_weights.pLDDT))}; "
+            f"export WEIGHT_IPAE_PENALTY={shlex.quote(str(cfg.ranking_weights.iPAE_penalty))}; "
+            f"export WEIGHT_RMSD_PENALTY={shlex.quote(str(cfg.ranking_weights.rmsd_penalty))}; "
         )
         cmd = env_prefix + build_stage_script(container_run_root, stage.name)
         job_spec = RunaiJobSpec(
@@ -138,7 +151,17 @@ def run(args: argparse.Namespace) -> int:
         )
 
         rc = submit_or_echo(job_spec, dry_run=args.dry_run)
-        stage_states[stage.name] = "completed" if (args.dry_run or rc == 0) else f"submit_failed:{rc}"
+        if args.dry_run:
+            stage_states[stage.name] = "completed"
+        elif rc != 0:
+            stage_states[stage.name] = f"submit_failed:{rc}"
+        else:
+            # Wait for the container job to actually finish before proceeding
+            # to the next stage — runai submit only confirms acceptance.
+            final_state = wait_for_job(
+                job_spec.name, job_spec.cluster, stage_cfg.timeout_minutes
+            )
+            stage_states[stage.name] = final_state
 
     if not args.dry_run and local_state_enabled:
         write_json(run_root / "orchestrator_state.json", stage_states)

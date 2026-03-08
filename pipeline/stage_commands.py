@@ -343,21 +343,125 @@ for SEQ_DIR in "$AF3_ROOT"/*/; do
     --norun_data_pipeline
 done
 python - <<'PYEOF'
-import csv, glob, json
-from pathlib import Path
-from statistics import mean
+import csv, glob, json, math, gzip
+from pathlib import PathpL
+
+def parse_cif_ca_coords(filepath):
+    # Simple parser for mmCIF files to extract CA coordinates and pLDDT (B-factors).
+    coords = []
+    plddts = []
+    lines = []
+    
+    if str(filepath).endswith('.gz'):
+         with gzip.open(filepath, 'rt') as f:
+             lines = f.readlines()
+    else:
+         with open(filepath, 'rt') as f:
+             lines = f.readlines()
+
+    in_loop = False
+    for line in lines:
+        if line.startswith('_atom_site.'):
+            in_loop = True
+            continue
+        if in_loop and line.startswith('#'):
+            in_loop = False
+            continue
+            
+        if in_loop and line.startswith('ATOM'):
+            parts = line.split()
+            # typically parts[3] is atom name, parts[10]/parts[11] are coords, parts[14] is B-factor in standard af3 cif
+            # Let's cleanly find 'CA'
+            if len(parts) > 14 and parts[3] == 'CA':
+                 x, y, z = float(parts[10]), float(parts[11]), float(parts[12])
+                 plddt = float(parts[14])
+                 coords.append((x,y,z))
+                 plddts.append(plddt)
+    return coords, plddts
+
+def calculate_rmsd(coords1, coords2):
+    # Calculate Kabsch RMSD between two sets of coordinates.
+    n = min(len(coords1), len(coords2))
+    if n == 0: return 0.0
+    c1 = coords1[:n]
+    c2 = coords2[:n]
+    
+    # center
+    cen1 = [sum(x)/n for x in zip(*c1)]
+    cen2 = [sum(x)/n for x in zip(*c2)]
+    
+    c1_c = [(x-cen1[0], y-cen1[1], z-cen1[2]) for x,y,z in c1]
+    c2_c = [(x-cen2[0], y-cen2[1], z-cen2[2]) for x,y,z in c2]
+    
+    # We will use a simple unaligned RMSD if Kabsch is too heavy without numpy, 
+    # but let's assume they are already reasonably aligned from the same frame, or we just want 
+    # the raw distance deviation of the generated vs predicted (which AF3 does not physically rotate by default).
+    # Actually, AF3 *does* place it arbitrarily. Need Kabsch.
+    try:
+        import numpy as np
+        P = np.array(c1_c)
+        Q = np.array(c2_c)
+        C = np.dot(np.transpose(P), Q)
+        V, S, W = np.linalg.svd(C)
+        d = (np.linalg.det(V) * np.linalg.det(W)) < 0.0
+        if d:
+            S[-1] = -S[-1]
+            V[:, -1] = -V[:, -1]
+        U = np.dot(V, W)
+        P_rot = np.dot(P, U)
+        diff = P_rot - Q
+        rmsd = np.sqrt((diff * diff).sum() / n)
+        return float(rmsd)
+    except ImportError:
+        # Fallback to direct distance if numpy fails (unlikely in af3 container)
+        err = sum((a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2 for a,b in zip(c1_c, c2_c))
+        return math.sqrt(err/n)
+
 stage=Path('{stage_dir}')
+run_root=Path('{run_root}')
+
+# pre-load original backbones for RMSD
+bb_cifs = {{}}
+# From stage 03
+for r in glob.glob(str(run_root/'03_rfd3_backbones'/'output'/'*'/'*.cif.gz')):
+    bb_cifs[Path(r).stem.replace('.cif', '')] = r
+# Follow-up rediffusions
+for r in glob.glob(str(run_root/'07_optional_rediffusion'/'output'/'*'/'*.cif.gz')):
+    bb_cifs[Path(r).stem.replace('.cif', '')] = r
+
 rows=[]
 for fp in glob.glob(str(stage/'af3'/'*'/'output'/'*'/'seed-*'/'*_summary_confidences.json')):
     data=json.load(open(fp))
     cid=Path(fp).parts[-5]
+    
+    # Parent BB ID (strip _seqX)
+    bb_id = cid.rsplit('_seq', 1)[0]
+    
     ptm=float(data.get('ptm', data.get('pTM', 0.0)) or 0.0)
     iptm=float(data.get('iptm', data.get('ipTM', 0.0)) or 0.0)
     ipsae=float(data.get('ipsae', data.get('ipSAE', data.get('interface_predicted_sae', 0.0))) or 0.0)
-    rows.append((cid, ptm, iptm, ipsae, fp))
+    ipae=float(data.get('ipae', data.get('iPAE', 0.0)) or 0.0)
+    
+    # Find matching CIF
+    cif_file = Path(fp).parent / f"{{cid}}_model.cif"
+    plddt_avg = 0.0
+    rmsd = 0.0
+    
+    if cif_file.exists():
+        af3_coords, plddts = parse_cif_ca_coords(cif_file)
+        if plddts:
+            plddt_avg = sum(plddts) / len(plddts)
+            
+        if bb_id in bb_cifs:
+            bb_coords, _ = parse_cif_ca_coords(bb_cifs[bb_id])
+            if af3_coords and bb_coords:
+                rmsd = calculate_rmsd(af3_coords, bb_coords)
+
+    rows.append((cid, ptm, iptm, ipsae, plddt_avg, ipae, rmsd, fp))
+
 with open(stage/'summary.csv','w',newline='') as f:
     w=csv.writer(f)
-    w.writerow(['candidate_id','pTM','ipTM','ipSAE','summary_conf_path'])
+    w.writerow(['candidate_id','pTM','ipTM','ipSAE','pLDDT','iPAE','rmsd_to_diffused','summary_conf_path'])
     w.writerows(rows)
 PYEOF
 """ + _epilog(stage_dir, stage_name, "sum(1 for _ in open(Path('{stage_dir}')/'summary.csv'))-1")
@@ -366,20 +470,37 @@ PYEOF
         return _prolog(stage_dir, stage_name) + f"""
 python - <<'PYEOF'
 import csv, json
+import os
 from pathlib import Path
 from collections import defaultdict
 stage=Path('{stage_dir}')
 inp=Path('{run_root}/05_af3_score_pass1/summary.csv')
 params=json.load(open(stage/'params.json')) if (stage/'params.json').exists() else {{}}
 shortlist=int(params.get('shortlist',12))
-th={{'pTM':0.65,'ipTM':0.6,'ipSAE':0.55}}
+th={{
+    'pTM': float(os.environ.get('THRESHOLD_PTM', 0.65)),
+    'ipTM': float(os.environ.get('THRESHOLD_IPTM', 0.6)),
+    'ipSAE': float(os.environ.get('THRESHOLD_IPSAE', 0.55)),
+    'pLDDT': float(os.environ.get('THRESHOLD_PLDDT', 70.0)),
+    'iPAE': float(os.environ.get('THRESHOLD_IPAE', 15.0)),
+    'RMSD': float(os.environ.get('THRESHOLD_RMSD', 3.0)),
+}}
 rows=[]
 if inp.exists():
     r=csv.DictReader(open(inp))
     for d in r:
         ptm=float(d.get('pTM',0)); iptm=float(d.get('ipTM',0)); ipsae=float(d.get('ipSAE',0))
-        pass_all = ptm>=th['pTM'] and iptm>=th['ipTM'] and ipsae>=th['ipSAE']
-        score=0.2*ptm+0.3*iptm+0.3*ipsae
+        plddt=float(d.get('pLDDT',0)); ipae=float(d.get('iPAE',0)); rmsd=float(d.get('rmsd_to_diffused',0))
+        pass_all = ptm>=th['pTM'] and iptm>=th['ipTM'] and ipsae>=th['ipSAE'] and plddt>=th['pLDDT'] and ipae<=th['iPAE'] and rmsd<=th['RMSD']
+        
+        wt_ptm = float(os.environ.get('WEIGHT_PTM', 0.2))
+        wt_iptm = float(os.environ.get('WEIGHT_IPTM', 0.3))
+        wt_ipsae = float(os.environ.get('WEIGHT_IPSAE', 0.3))
+        wt_plddt = float(os.environ.get('WEIGHT_PLDDT', 0.05))
+        wt_ipae_pen = float(os.environ.get('WEIGHT_IPAE_PENALTY', 0.05))
+        wt_rmsd_pen = float(os.environ.get('WEIGHT_RMSD_PENALTY', 0.1))
+        
+        score=(ptm * wt_ptm) + (iptm * wt_iptm) + (ipsae * wt_ipsae) + ((plddt/100.0) * wt_plddt) - (ipae * wt_ipae_pen) - (rmsd * wt_rmsd_pen)
         cluster=f"c{{int(ptm*10)}}_{{int(iptm*10)}}_{{int(ipsae*10)}}"
         d2=dict(d); d2.update(dict(pass_hard=pass_all, composite_score=score, cluster_id=cluster)); rows.append(d2)
 rows.sort(key=lambda x: x['composite_score'], reverse=True)
@@ -392,7 +513,7 @@ for row in rows:
     row.setdefault('is_representative', False)
     row['selected_for_rediffusion']=row in selected
 with open(stage/'summary.csv','w',newline='') as f:
-    w=csv.DictWriter(f, fieldnames=['candidate_id','pTM','ipTM','ipSAE','pass_hard','composite_score','cluster_id','is_representative','selected_for_rediffusion','summary_conf_path'])
+    w=csv.DictWriter(f, fieldnames=['candidate_id','pTM','ipTM','ipSAE','pLDDT','iPAE','rmsd_to_diffused','pass_hard','composite_score','cluster_id','is_representative','selected_for_rediffusion','summary_conf_path'])
     w.writeheader(); w.writerows(rows)
 PYEOF
 """ + _epilog(stage_dir, stage_name, "sum(1 for _ in open(Path('{stage_dir}')/'summary.csv'))-1")
@@ -447,9 +568,11 @@ for r in rows:
     r.setdefault('parent_backbone_id', r.get('candidate_id',''))
     r.setdefault('lineage_first_pass', r.get('candidate_id',''))
     r.setdefault('lineage_second_pass', r.get('candidate_id',''))
+    r.setdefault('pLDDT', 0.0)
+    r.setdefault('iPAE', 0.0)
     r.setdefault('pose_retention', 0.0)
     r.setdefault('interface_geometry_agreement', 0.0)
-    r.setdefault('optional_rmsd_to_design', '')
+    r.setdefault('optional_rmsd_to_design', r.get('rmsd_to_diffused', ''))
     r.setdefault('clash_free_interface', True)
     r.setdefault('structure_path', '')
     r.setdefault('diagnostics_path', '')
@@ -457,7 +580,7 @@ rows.sort(key=lambda x: float(x.get('composite_score',0) or 0), reverse=True)
 for i,r in enumerate(rows,1):
     r['final_rank']=i
 with open(stage/'summary.csv','w',newline='') as f:
-    fields=['candidate_id','run_id','hotspot_id','hotspot_source','hotspot_label','parent_backbone_id','lineage_first_pass','lineage_second_pass','pTM','ipTM','ipSAE','pose_retention','interface_geometry_agreement','optional_rmsd_to_design','clash_free_interface','esm_score','final_rank','structure_path','diagnostics_path']
+    fields=['candidate_id','run_id','hotspot_id','hotspot_source','hotspot_label','parent_backbone_id','lineage_first_pass','lineage_second_pass','pTM','ipTM','ipSAE','pLDDT','iPAE','pose_retention','interface_geometry_agreement','optional_rmsd_to_design','clash_free_interface','esm_score','final_rank','structure_path','diagnostics_path']
     w=csv.DictWriter(f, fieldnames=fields); w.writeheader()
     for r in rows:
         r['run_id']='{run_root.name}'
